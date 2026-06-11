@@ -29,7 +29,7 @@ export default function App() {
   const [statusLabel, setStatusLabel] = useState("< lurking... />");
   const [selectedModel, setSelectedModel] = useState("resume-brain");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -43,7 +43,7 @@ export default function App() {
   ];
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  
+
   const { user, signOut, getToken, isAnonymous } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
@@ -74,7 +74,7 @@ export default function App() {
       if (!res.ok) return;
       const data = await res.json();
       setSessions(data.sessions ?? []);
-    } catch {}
+    } catch { }
   }, [API, authHeaders]);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
@@ -101,7 +101,7 @@ export default function App() {
           headers: await authHeaders(),
         });
         if (!res.ok) throw new Error("Failed");
-        
+
         const data = await res.json();
         if (!mounted) return;
 
@@ -110,7 +110,7 @@ export default function App() {
           role: m.role === "assistant" ? "ai" : "user",
           content: m.content,
         }));
-        
+
         setMessages(msgs);
         setUploadSuccess(msgs.length > 0);
       } catch (err) {
@@ -136,10 +136,10 @@ export default function App() {
     });
     if (!res.ok) throw new Error("Failed");
     const session = await res.json();
-    
+
     // Update list first
     setSessions(prev => [session, ...prev]);
-    
+
     // Set active ID but we DON'T clear messages here if we're about to populate them in handleSend
     setActiveId(session.id);
     setUploadSuccess(false);
@@ -148,7 +148,7 @@ export default function App() {
 
   const deleteSession = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (deletingSessionsRef.current.has(id)) {
       return;
     }
@@ -156,10 +156,10 @@ export default function App() {
 
     // Optimistically update UI
     setSessions(prev => prev.filter(s => s.id !== id));
-    if (activeId === id) { 
-      setActiveId(null); 
-      setMessages([]); 
-      setUploadSuccess(false); 
+    if (activeId === id) {
+      setActiveId(null);
+      setMessages([]);
+      setUploadSuccess(false);
     }
 
     try {
@@ -570,7 +570,7 @@ export default function App() {
 
       const q = inputVal.trim();
       setInputVal("");
-      
+
       const userMsg: Message = { id: Date.now().toString(), role: "user", content: q };
       aiId = (Date.now() + 1).toString();
       const aiMsg: Message = { id: aiId, role: "ai", content: "", isStreaming: true };
@@ -669,21 +669,21 @@ export default function App() {
 
         {/* ChatGPT Style History */}
         <div style={{ padding: "1.1rem 1.4rem", flex: 1, overflowY: "auto" }}>
-          <button 
+          <button
             onClick={handleNewChat}
             style={{ width: "100%", padding: "0.6rem 0", background: "transparent", border: `1px solid ${green}`, borderRadius: 4, color: green, cursor: "pointer", marginBottom: "1rem", fontSize: "0.75rem", ...mono }}
           >
             + New Chat
           </button>
-          
+
           <div style={{ fontSize: "0.58rem", letterSpacing: "0.2em", color: green, textTransform: "uppercase", marginBottom: "0.75rem", opacity: 0.75 }}>
             [ recent sessions ]
           </div>
-          
+
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {sessions.map(s => (
-              <div 
-                key={s.id} 
+              <div
+                key={s.id}
                 onClick={() => setActiveId(s.id)}
                 style={{
                   padding: "0.6rem 0.8rem", borderRadius: 4, cursor: "pointer",
@@ -696,7 +696,7 @@ export default function App() {
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {s.title || "Untitled"}
                 </span>
-                <button 
+                <button
                   onClick={(e) => deleteSession(s.id, e)}
                   style={{ background: "none", border: "none", color: "#8a9a7a", cursor: "pointer" }}
                 >
@@ -709,26 +709,26 @@ export default function App() {
 
         <div style={{ padding: "0.85rem 1.4rem", borderTop: `1px solid ${borderCol}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.8rem" }}>
-            <div style={{ 
-              width: 32, height: 32, borderRadius: 3, background: green, 
-              display: "flex", alignItems: "center", justifyContent: "center", 
-              fontSize: "0.75rem", color: "#fff", fontWeight: 900 
+            <div style={{
+              width: 32, height: 32, borderRadius: 3, background: green,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "0.75rem", color: "#fff", fontWeight: 900
             }}>
               {user?.email?.[0].toUpperCase() || "?"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ 
-                fontSize: "0.72rem", color: "#1a2a1a", fontWeight: 700, 
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" 
+              <div style={{
+                fontSize: "0.72rem", color: "#1a2a1a", fontWeight: 700,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
               }}>
                 {isAnonymous ? "Guest User" : user?.email?.split("@")[0]}
               </div>
-              <button 
+              <button
                 onClick={isAnonymous ? () => setAuthModalOpen(true) : () => signOut()}
-                style={{ 
-                  background: "none", border: "none", padding: 0, 
-                  color: green, fontSize: "0.6rem", cursor: "pointer", 
-                  letterSpacing: "0.1em", textTransform: "uppercase", ...mono 
+                style={{
+                  background: "none", border: "none", padding: 0,
+                  color: green, fontSize: "0.6rem", cursor: "pointer",
+                  letterSpacing: "0.1em", textTransform: "uppercase", ...mono
                 }}
               >
                 {isAnonymous ? "[ sign in ]" : "[ sign out ]"}
@@ -799,9 +799,9 @@ export default function App() {
                   <div style={{ fontSize: "0.56rem", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: "0.45rem", opacity: 0.5, color: msg.role === "user" ? "#c8dfc8" : green }}>
                     {msg.role === "ai" ? "[ ai copilot ]" : "you"}
                   </div>
-                  <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "1.4em" : undefined }}>
+                  <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: "flex", alignItems: "center" }}>
                     {msg.isStreaming && msg.content === "" ? (
-                      <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+                      <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
                         {[0, 0.2, 0.4].map((d, i) => (
                           <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
                         ))}
@@ -826,7 +826,7 @@ export default function App() {
 
         {/* INPUT AREA */}
         <div style={{ borderTop: `1px solid ${borderCol}`, padding: "0.9rem 1.2rem", background: bg, flexShrink: 0 }}>
-          
+
           {/* File Pill */}
           {pendingFile && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.8rem", background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 4, width: "fit-content", marginBottom: "0.6rem", fontSize: "0.7rem", color: green }}>
@@ -847,7 +847,7 @@ export default function App() {
               📎
             </button>
             <input type="file" accept="application/pdf" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
-            
+
             <textarea
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
