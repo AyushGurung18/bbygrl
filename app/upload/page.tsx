@@ -52,12 +52,68 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, [getToken]);
 
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rafRef = useRef<number>(0);
   const crocStateRef = useRef<CrocState>("idle");
   const deletingSessionsRef = useRef<Set<string>>(new Set());
+
+  const lastLoadedSessionIdRef = useRef<string | null>(null);
+  const isAnsweringRef = useRef(isAnswering);
+  useEffect(() => {
+    isAnsweringRef.current = isAnswering;
+  }, [isAnswering]);
+
+  const streamingBufferRef = useRef("");
+  const streamingActiveRef = useRef(false);
+  const typingTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+    };
+  }, []);
+
+  const startTyping = useCallback((msgId: string) => {
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+    }
+
+    const tick = () => {
+      const buf = streamingBufferRef.current;
+      const active = streamingActiveRef.current;
+
+      if (buf.length === 0 && !active) {
+        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, isStreaming: false } : m));
+        typingTimerRef.current = null;
+        return;
+      }
+
+      if (buf.length > 0) {
+        let consumeCount = 1;
+        if (buf.length > 200) consumeCount = 12;
+        else if (buf.length > 100) consumeCount = 8;
+        else if (buf.length > 50) consumeCount = 4;
+        else if (buf.length > 20) consumeCount = 2;
+
+        const nextPart = buf.slice(0, consumeCount);
+        streamingBufferRef.current = buf.slice(consumeCount);
+
+        setMessages(prev => prev.map(m =>
+          m.id === msgId ? { ...m, content: m.content + nextPart, isStreaming: true } : m
+        ));
+      }
+
+      typingTimerRef.current = setTimeout(tick, 15);
+    };
+
+    tick();
+  }, []);
 
   const handleNewChat = useCallback(() => {
     setActiveId(null);
@@ -83,19 +139,29 @@ export default function App() {
     if (!activeId) {
       setMessages([]);
       setUploadSuccess(false);
+      lastLoadedSessionIdRef.current = null;
+      return;
+    }
+
+    if (activeId === lastLoadedSessionIdRef.current) {
+      return;
+    }
+
+    if (isAnsweringRef.current) {
+      // If we are currently sending/streaming a message (e.g. creating a new session),
+      // do not clear or reload messages to avoid wiping out the local state.
+      lastLoadedSessionIdRef.current = activeId;
       return;
     }
 
     let mounted = true;
+    lastLoadedSessionIdRef.current = activeId;
 
     // Instantly clear messages of the previous session to make switching responsive
     setMessages([]);
     setUploadSuccess(false);
 
     const loadMessages = async () => {
-      // Don't fetch if we're in the middle of sending a message for a new session
-      if (isAnswering) return;
-
       try {
         const res = await fetch(`${API}/sessions/${activeId}/messages`, {
           headers: await authHeaders(),
@@ -123,7 +189,7 @@ export default function App() {
 
     loadMessages();
     return () => { mounted = false; };
-  }, [activeId, API, getToken, isAnswering]); // Added isAnswering to dependency to help avoid races
+  }, [activeId, API, getToken]); // Decoupled isAnswering
 
   const createSession = useCallback(async (title?: string) => {
     const res = await fetch(`${API}/sessions`, {
@@ -146,9 +212,7 @@ export default function App() {
     return session;
   }, [API, getToken]);
 
-  const deleteSession = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-
+  const confirmDeleteSession = useCallback(async (id: string) => {
     if (deletingSessionsRef.current.has(id)) {
       return;
     }
@@ -174,6 +238,11 @@ export default function App() {
       deletingSessionsRef.current.delete(id);
     }
   }, [API, activeId, authHeaders, fetchSessions]);
+
+  const deleteSession = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSessionToDelete(id);
+  }, []);
 
   // --- Croc status and autoscroll ---
   useEffect(() => {
@@ -588,25 +657,43 @@ export default function App() {
       });
       if (!res.ok) throw new Error("Failed");
 
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      if (!reader) throw new Error("No stream");
+      // Check if the response is streaming (or plain text cache hit, which we also stream)
+      const contentType = res.headers.get("Content-Type");
+      if (contentType && (contentType.includes("text/event-stream") || contentType.includes("text/plain"))) {
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        if (!reader) throw new Error("No stream reader available for streaming response");
 
-      let started = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (!started) {
-          started = true;
-          setCrocState("streaming");
+        // Initialize typewriter refs
+        streamingBufferRef.current = "";
+        streamingActiveRef.current = true;
+
+        setCrocState("streaming");
+        startTyping(aiId);
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          streamingBufferRef.current += chunk;
         }
+
+        streamingActiveRef.current = false;
+
+        // Wait for typewriter loop to catch up and fully output the buffered text
+        while (streamingBufferRef.current.length > 0) {
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+      } else {
+        // Fallback for JSON responses
+        const data = await res.json();
+        const content = data.content || data.cached_answer || "";
+
         setMessages(prev => prev.map(m =>
-          m.id === aiId ? { ...m, content: m.content + chunk, isStreaming: true } : m
+          m.id === aiId ? { ...m, content: content, isStreaming: false } : m
         ));
       }
 
-      setMessages(prev => prev.map(m => m.id === aiId ? { ...m, isStreaming: false } : m));
       setCrocState("done");
       setTimeout(() => setCrocState("idle"), 2200);
     } catch (err) {
@@ -881,6 +968,75 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {sessionToDelete && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 100,
+          backdropFilter: "blur(4px)"
+        }}>
+          <div style={{
+            background: bg,
+            border: `1px solid ${green}`,
+            borderRadius: 4,
+            padding: "1.6rem",
+            maxWidth: 360,
+            width: "90%",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+            ...mono
+          }}>
+            <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "#1a2a1a", marginBottom: "0.8rem", letterSpacing: "0.02em" }}>
+              [ DELETE SESSION ]
+            </div>
+            <div style={{ fontSize: "0.74rem", lineHeight: 1.6, color: "#5a7a5a", marginBottom: "1.5rem" }}>
+              Are you sure you want to delete this chat session? All message history will be permanently deleted.
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button
+                onClick={() => setSessionToDelete(null)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "transparent",
+                  border: `1px solid ${borderCol}`,
+                  borderRadius: 3,
+                  color: "#1a2a1a",
+                  cursor: "pointer",
+                  fontSize: "0.68rem",
+                  letterSpacing: "0.04em",
+                  ...mono
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const id = sessionToDelete;
+                  setSessionToDelete(null);
+                  await confirmDeleteSession(id);
+                }}
+                style={{
+                  padding: "0.5rem 1rem",
+                  background: "#b33939",
+                  border: "none",
+                  borderRadius: 3,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: "0.68rem",
+                  letterSpacing: "0.04em",
+                  ...mono
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
