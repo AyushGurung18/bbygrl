@@ -706,6 +706,35 @@ export default function App() {
     }
   };
 
+  const renderFormattedContent = (content: string) => {
+    const regex = /(\*?_?\*\*[^*_]+\*\*_?\*?|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+    const parts = content.split(regex);
+    return parts.map((part, i) => {
+      if (!part) return null;
+      if (
+        (part.startsWith('*_**') && part.endsWith('**_*')) ||
+        (part.startsWith('**_*') && part.endsWith('*_**')) ||
+        (part.startsWith('***') && part.endsWith('***')) ||
+        (part.startsWith('**_') && part.endsWith('_**')) ||
+        (part.startsWith('_**') && part.endsWith('**_'))
+      ) {
+        const clean = part
+          .replace(/^(\*_*\*|\*\*_\*|\*\*\*|_\*\*|\*\*_\*?)/, "")
+          .replace(/(\*_\*\*|\*\*_\*|\*\*\*|_\*\*|\*\*_\*?)$/, "");
+        return <strong key={i}><em>{clean}</em></strong>;
+      }
+      if (part.startsWith('**') && part.endsWith('**')) {
+        const clean = part.slice(2, -2);
+        return <strong key={i}>{clean}</strong>;
+      }
+      if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+        const clean = part.slice(1, -1);
+        return <em key={i}>{clean}</em>;
+      }
+      return part;
+    });
+  };
+
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
   const bg = "#e6e1d8";
   const green = "#1a6b3a";
@@ -886,7 +915,7 @@ export default function App() {
                   <div style={{ fontSize: "0.56rem", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: "0.45rem", opacity: 0.5, color: msg.role === "user" ? "#c8dfc8" : green }}>
                     {msg.role === "ai" ? "[ ai copilot ]" : "you"}
                   </div>
-                  <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: "flex", alignItems: "center" }}>
+                  <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center" }}>
                     {msg.isStreaming && msg.content === "" ? (
                       <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
                         {[0, 0.2, 0.4].map((d, i) => (
@@ -895,9 +924,7 @@ export default function App() {
                       </span>
                     ) : (
                       <>
-                        {msg.content.split("**").map((part, i) =>
-                          i % 2 === 1 ? <span key={i} style={{ fontWeight: 900 }}>{part}</span> : part
-                        )}
+                        {renderFormattedContent(msg.content)}
                         {msg.isStreaming && msg.content !== "" && (
                           <span style={{ display: "inline-block", width: 7, height: 13, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
                         )}
