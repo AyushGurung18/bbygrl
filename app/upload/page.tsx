@@ -878,14 +878,7 @@ export default function App() {
               </>
             )}
           </div>
-
-          <select
-            value={selectedModel}
-            onChange={e => setSelectedModel(e.target.value)}
-            style={{ padding: "0.3rem", fontSize: "0.65rem", background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 3, color: "#1a2a1a", outline: "none", cursor: "pointer", maxWidth: "100%", ...mono }}
-          >
-            {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
+          {/* Model selection dropdown removed: routing handled by intent router on the backend */}
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "1.4rem 1.2rem", display: "flex", flexDirection: "column", gap: "1.1rem" }}>
