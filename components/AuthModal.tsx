@@ -13,12 +13,24 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { signInWithGoogle, isAnonymous } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  const {
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
+    linkEmailToAnon,
+    isAnonymous,
+  } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
       setError("");
       setInfo("");
+      setEmail("");
+      setPassword("");
     }
   }, [isOpen]);
 
@@ -42,6 +54,41 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       await signInWithGoogle();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to initialize Google sign-in.");
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setInfo("");
+    try {
+      if (isSignUp) {
+        if (isAnonymous) {
+          setInfo("Linking guest session to your new account...");
+          await linkEmailToAnon(email, password);
+          setInfo("Success! Account linked. Logging in...");
+        } else {
+          setInfo("Creating your account...");
+          await signUpWithEmail(email, password);
+          setInfo("Success! Account created. Verification email sent if configured.");
+        }
+      } else {
+        setInfo("Signing you in...");
+        await signInWithEmail(email, password);
+        setInfo("Success! Logged in.");
+      }
+      setTimeout(() => {
+        onClose();
+        setLoading(false);
+      }, 1200);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed.");
       setLoading(false);
     }
   };
@@ -183,7 +230,95 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             )}
           </button>
 
-          <div style={{ marginTop: "1.4rem", textAlign: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", margin: "1.2rem 0", gap: "0.5rem" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
+            <span style={{ fontSize: "0.62rem", color: "#8a9a7a", letterSpacing: "0.1em", textTransform: "uppercase" }}>or use email</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
+          </div>
+
+          <form onSubmit={handleEmailSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label htmlFor="auth-email" style={{ fontSize: "0.65rem", fontWeight: 700, color: "#4a5a4a", textTransform: "uppercase" }}>Email Address</label>
+              <input
+                id="auth-email"
+                type="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@domain.com"
+                style={{
+                  padding: "0.6rem 0.75rem",
+                  fontSize: "0.78rem",
+                  background: bg,
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  borderRadius: 4,
+                  color: "#1a2a1a",
+                  outline: "none",
+                  ...mono,
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <label htmlFor="auth-password" style={{ fontSize: "0.65rem", fontWeight: 700, color: "#4a5a4a", textTransform: "uppercase" }}>Password</label>
+              <input
+                id="auth-password"
+                type="password"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{
+                  padding: "0.6rem 0.75rem",
+                  fontSize: "0.78rem",
+                  background: bg,
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  borderRadius: 4,
+                  color: "#1a2a1a",
+                  outline: "none",
+                  ...mono,
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="email-submit-btn"
+              style={{
+                width: "100%",
+                padding: "0.8rem 1rem",
+                background: green,
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: loading ? "not-allowed" : "pointer",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                transition: "all 0.2s ease",
+                opacity: loading ? 0.7 : 1,
+                textTransform: "uppercase",
+                ...mono,
+              }}
+            >
+              {loading ? "[ loading... ]" : isSignUp ? (isAnonymous ? "[ link & sign up ]" : "[ sign up ]") : "[ sign in ]"}
+            </button>
+          </form>
+
+          <div style={{ marginTop: "1rem", textAlign: "center" }}>
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: "0.68rem", color: green, fontWeight: 700,
+                letterSpacing: "0.05em", textDecoration: "underline", ...mono,
+              }}
+            >
+              {isSignUp ? "already have an account? sign in" : "need an account? sign up"}
+            </button>
+          </div>
+
+          <div style={{ marginTop: "1.2rem", textAlign: "center", borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: "1rem" }}>
             <button
               onClick={onClose}
               style={{
@@ -212,6 +347,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         .google-signin-btn:active {
           transform: translateY(0);
           box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+        }
+        .email-submit-btn:hover {
+          background: #14502b !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(26,107,58,0.2) !important;
+        }
+        .email-submit-btn:active {
+          transform: translateY(0);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
       `}</style>
     </>
