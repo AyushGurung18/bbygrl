@@ -33,6 +33,9 @@ export default function App() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
   const MODELS = [
     { id: "resume-brain", label: "Local Ollama (schema context)" },
@@ -66,6 +69,12 @@ export default function App() {
   useEffect(() => {
     isAnsweringRef.current = isAnswering;
   }, [isAnswering]);
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const streamingBufferRef = useRef("");
   const streamingActiveRef = useRef(false);
@@ -574,38 +583,83 @@ export default function App() {
       const f = e.target.files[0];
       if (f.type !== "application/pdf") {
         alert("Only PDF files are supported!");
+        e.target.value = "";
         return;
       }
+      if (f.size > MAX_UPLOAD_SIZE_BYTES) {
+        alert(`That file is too large (max ${Math.floor(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))}MB).`);
+        e.target.value = "";
+        return;
+      }
+      setUploadError(null);
       setPendingFile(f);
     }
     e.target.value = "";
   };
 
-  const uploadFile = async (uploadedFile: File, sessionId: string) => {
+  // Returns true on success, false on failure — callers must check this before
+  // proceeding (e.g. handleSend shouldn't send a chat message about a doc that
+  // never actually got indexed).
+  const uploadFile = async (uploadedFile: File, sessionId: string): Promise<boolean> => {
     setIsUploading(true);
     setUploadSuccess(false);
+    setUploadError(null);
     try {
+      const token = await getToken();
+      if (!token) {
+        setUploadError("Your session isn't ready yet. Please wait a moment and try again.");
+        return false;
+      }
+
       const formData = new FormData();
       formData.append("file", uploadedFile);
       const res = await fetch(`${API}/upload?session_id=${sessionId}`, {
         method: "POST",
-        headers: await authHeaders(),
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
 
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Your session has expired. Please sign in again.");
+        }
+        if (res.status === 413) {
+          throw new Error("That file is too large for the server to accept.");
+        }
+        if (res.status >= 500) {
+          throw new Error("The server hit an error processing that file. Please try again.");
+        }
+        throw new Error(`Upload failed (status ${res.status}).`);
+      }
+
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error("Received an unexpected response from the server.");
+      }
+
+      if (!isMountedRef.current) return true;
       setUploadSuccess(true);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: "ai",
         content: `Document **${uploadedFile.name}** indexed successfully. What would you like to know about it?`,
       }]);
-    } catch (err) {
-      alert("Upload failed. Ensure the server is running.");
+      return true;
+    } catch (err: any) {
+      if (isMountedRef.current) {
+        const message = err instanceof TypeError
+          ? "Could not reach the server. Please check your connection and try again."
+          : (err?.message || "Upload failed. Please try again.");
+        setUploadError(message);
+      }
+      return false;
     } finally {
-      setIsUploading(false);
-      setPendingFile(null);
+      if (isMountedRef.current) {
+        setIsUploading(false);
+        setPendingFile(null);
+      }
     }
   };
 
@@ -633,7 +687,8 @@ export default function App() {
       }
 
       if (pendingFile) {
-        await uploadFile(pendingFile, sid!);
+        const uploaded = await uploadFile(pendingFile, sid!);
+        if (!uploaded) return;
         if (!inputVal.trim()) return;
       }
 
@@ -933,6 +988,13 @@ export default function App() {
 
         {/* INPUT AREA */}
         <div style={{ borderTop: `1px solid ${borderCol}`, padding: "0.9rem 1.2rem", background: bg, flexShrink: 0 }}>
+
+          {/* Upload Error Banner */}
+          {uploadError && (
+            <div style={{ padding: "0.5rem 0.8rem", background: "rgba(200,50,50,0.08)", border: "1px solid rgba(200,50,50,0.3)", borderRadius: 4, marginBottom: "0.6rem", fontSize: "0.7rem", color: "#c85050" }}>
+              {uploadError}
+            </div>
+          )}
 
           {/* File Pill */}
           {pendingFile && (
