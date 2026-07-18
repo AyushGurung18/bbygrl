@@ -181,7 +181,11 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 5000); // Poll every 5s
+    // Each refresh costs 2-3 LangSmith API calls (root runs + two levels of
+    // child-run lookups for the pipeline breakdown) — 5s was fine before that,
+    // but multiplies fast on a free-tier rate limit. 30s keeps this usable
+    // without tripping 429s from normal dashboard-left-open usage.
+    const interval = setInterval(fetchMetrics, 30000);
     return () => clearInterval(interval);
   }, []);
 
