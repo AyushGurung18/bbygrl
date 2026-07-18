@@ -31,6 +31,9 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
+
   const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
   const MODELS = [
@@ -67,6 +70,23 @@ export default function App() {
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
+  }, []);
+
+  // --- One-time typewriter for the empty-state hint ---
+  const EMPTY_STATE_TEXT = "Attach a PDF and I'll retrieve, verify, and cite the source before answering.";
+  const [typedHint, setTypedHint] = useState("");
+  const typewriterPlayedRef = useRef(false);
+
+  useEffect(() => {
+    if (typewriterPlayedRef.current) return;
+    typewriterPlayedRef.current = true;
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setTypedHint(EMPTY_STATE_TEXT.slice(0, i));
+      if (i >= EMPTY_STATE_TEXT.length) clearInterval(timer);
+    }, 18);
+    return () => clearInterval(timer);
   }, []);
 
   const streamingBufferRef = useRef("");
@@ -137,10 +157,41 @@ export default function App() {
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
+  const loadMessagesForSession = useCallback(async (sessionId: string, mountedCheck: () => boolean) => {
+    setIsLoadingMessages(true);
+    setMessagesLoadError(null);
+    try {
+      const res = await fetch(`${API}/sessions/${sessionId}/messages`, {
+        headers: await authHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed");
+
+      const data = await res.json();
+      if (!mountedCheck()) return;
+
+      const msgs: Message[] = (data.messages ?? []).map((m: any) => ({
+        id: String(m.id),
+        role: m.role === "assistant" ? "ai" : "user",
+        content: m.content,
+      }));
+
+      setMessages(msgs);
+      setUploadSuccess(msgs.length > 0);
+    } catch (err) {
+      if (mountedCheck()) {
+        console.error("Error loading messages:", err);
+        setMessagesLoadError("Couldn't load this conversation. Check your connection and try again.");
+      }
+    } finally {
+      if (mountedCheck()) setIsLoadingMessages(false);
+    }
+  }, [API, authHeaders]);
+
   useEffect(() => {
     if (!activeId) {
       setMessages([]);
       setUploadSuccess(false);
+      setMessagesLoadError(null);
       lastLoadedSessionIdRef.current = null;
       return;
     }
@@ -159,39 +210,17 @@ export default function App() {
     let mounted = true;
     lastLoadedSessionIdRef.current = activeId;
 
-    // Instantly clear messages of the previous session to make switching responsive
-    setMessages([]);
-    setUploadSuccess(false);
-
-    const loadMessages = async () => {
-      try {
-        const res = await fetch(`${API}/sessions/${activeId}/messages`, {
-          headers: await authHeaders(),
-        });
-        if (!res.ok) throw new Error("Failed");
-
-        const data = await res.json();
-        if (!mounted) return;
-
-        const msgs: Message[] = (data.messages ?? []).map((m: any) => ({
-          id: String(m.id),
-          role: m.role === "assistant" ? "ai" : "user",
-          content: m.content,
-        }));
-
-        setMessages(msgs);
-        setUploadSuccess(msgs.length > 0);
-      } catch (err) {
-        if (mounted) {
-          console.error("Error loading messages:", err);
-          setMessages([]);
-        }
-      }
-    };
-
-    loadMessages();
+    // Keep the previous session's messages on screen (dimmed via isLoadingMessages)
+    // instead of instantly blanking to empty — an abrupt blank reads as the chat
+    // having vanished rather than as a page transitioning.
+    loadMessagesForSession(activeId, () => mounted);
     return () => { mounted = false; };
-  }, [activeId, API, getToken]); // Decoupled isAnswering
+  }, [activeId, loadMessagesForSession]);
+
+  const retryLoadMessages = useCallback(() => {
+    if (!activeId) return;
+    loadMessagesForSession(activeId, () => true);
+  }, [activeId, loadMessagesForSession]);
 
   const createSession = useCallback(async (title?: string) => {
     const res = await fetch(`${API}/sessions`, {
@@ -576,9 +605,12 @@ export default function App() {
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       {/* MAIN */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", minWidth: 0 }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", minWidth: 0, position: "relative" }}>
 
-        <div style={{ padding: "1.1rem 1.2rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap" }}>
+        <div className="bg-blob blob-1" />
+        <div className="bg-blob blob-2" />
+
+        <div style={{ padding: "1.1rem 1.2rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
           <button
             onClick={() => setSidebarOpen(true)}
             className="hamburger-btn"
@@ -593,28 +625,74 @@ export default function App() {
                 <div style={{ fontSize: "0.63rem", color: "#5a7a5a", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Context Loaded</div>
               </>
             )}
+            {isLoadingMessages && (
+              <div style={{ fontSize: "0.6rem", color: "#8a9a7a", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <span className="mini-spinner" />
+                loading…
+              </div>
+            )}
           </div>
           {/* Model selection dropdown removed: routing handled by intent router on the backend */}
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.4rem 1.2rem", display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-          {messages.length === 0 ? (
+        <div style={{
+          flex: 1, overflowY: "auto", padding: "1.4rem 1.2rem", display: "flex", flexDirection: "column", gap: "1.1rem",
+          position: "relative", zIndex: 1,
+          opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
+        }}>
+          {messagesLoadError ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem", gap: "0.9rem" }}>
+              <div style={{ fontSize: "0.75rem", color: "#c85050", textAlign: "center", maxWidth: 320, lineHeight: 1.7 }}>
+                {messagesLoadError}
+              </div>
+              <button
+                onClick={retryLoadMessages}
+                style={{ padding: "0.5rem 1rem", background: "transparent", border: `1px solid ${green}`, borderRadius: 4, color: green, cursor: "pointer", fontSize: "0.7rem", letterSpacing: "0.06em", ...mono }}
+              >
+                retry
+              </button>
+            </div>
+          ) : messages.length === 0 ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem" }}>
-              <div style={{ width: 50, height: 50, border: `1px solid ${borderCol}`, borderRadius: 4, background: cardBg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <div style={{ width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
+                <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
+                  <ellipse cx="32" cy="27" rx="17" ry="15" fill={cardBg} stroke={green} strokeWidth="1.5" />
+                  <circle cx="26" cy="25" r="2" fill={green} />
+                  <circle cx="38" cy="25" r="2" fill={green} />
+                  <path d="M26 32 Q32 36 38 32" stroke={green} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                  {[0, 1, 2, 3, 4, 5].map((i) => {
+                    const baseX = 13 + i * 7.6;
+                    return (
+                      <path
+                        key={i}
+                        className={`tentacle tentacle-${i}`}
+                        d={`M${baseX} 39 Q${baseX - 2} 48 ${baseX + 2} 54 T${baseX + 3} 60`}
+                        stroke={green}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        fill="none"
+                        style={{ transformOrigin: `${baseX}px 39px` } as React.CSSProperties}
+                      />
+                    );
+                  })}
                 </svg>
               </div>
               <h2 style={{ fontSize: "clamp(1.2rem,3vw,1.9rem)", fontWeight: 900, color: "#1a2a1a", margin: "0 0 0.5rem", textAlign: "center", ...mono }}>
                 ask your documents anything
               </h2>
-              <p style={{ fontSize: "0.7rem", color: "#6a8a6a", letterSpacing: "0.07em", textAlign: "center", maxWidth: 300, lineHeight: 2, textTransform: "uppercase", margin: 0 }}>
-                Attach a PDF and I'll retrieve, verify, and cite the source before answering.
+              <p style={{ fontSize: "0.7rem", color: "#6a8a6a", letterSpacing: "0.07em", textAlign: "center", maxWidth: 300, lineHeight: 2, textTransform: "uppercase", margin: 0, minHeight: "2.6em" }}>
+                {typedHint}
+                {typedHint.length < EMPTY_STATE_TEXT.length && (
+                  <span style={{ display: "inline-block", width: 5, height: 10, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
+                )}
               </p>
+              <div style={{ fontSize: "0.56rem", color: "#8a9a7a", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: "0.9rem", opacity: 0.7 }}>
+                octo · one tentacle per agentic step
+              </div>
             </div>
           ) : (
             messages.map((msg) => (
-              <div key={msg.id} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+              <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
                   maxWidth: "85%", padding: "0.9rem 1.1rem", borderRadius: 4,
                   border: `1px solid ${borderCol}`,
@@ -648,7 +726,7 @@ export default function App() {
         </div>
 
         {/* INPUT AREA */}
-        <div style={{ borderTop: `1px solid ${borderCol}`, padding: "0.9rem 1.2rem", background: bg, flexShrink: 0 }}>
+        <div style={{ borderTop: `1px solid ${borderCol}`, padding: "0.9rem 1.2rem", background: bg, flexShrink: 0, position: "relative", zIndex: 1 }}>
 
           {/* Upload Error Banner */}
           {uploadError && (
@@ -789,6 +867,33 @@ export default function App() {
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.13); border-radius: 3px; }
+
+        .bg-blob {
+          position: absolute; border-radius: 50%; filter: blur(60px);
+          opacity: 0.13; pointer-events: none; z-index: 0; background: ${green};
+        }
+        .blob-1 { width: 280px; height: 280px; top: -90px; left: -70px; animation: drift1 19s ease-in-out infinite; }
+        .blob-2 { width: 220px; height: 220px; bottom: -70px; right: -50px; animation: drift2 23s ease-in-out infinite; }
+        @keyframes drift1 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(40px, 30px); } }
+        @keyframes drift2 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-30px, -25px); } }
+
+        @keyframes tentacleWiggle { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        .tentacle { animation: tentacleWiggle 2.2s ease-in-out infinite; }
+        .tentacle-0 { animation-delay: 0s; }
+        .tentacle-1 { animation-delay: 0.12s; }
+        .tentacle-2 { animation-delay: 0.24s; }
+        .tentacle-3 { animation-delay: 0.36s; }
+        .tentacle-4 { animation-delay: 0.48s; }
+        .tentacle-5 { animation-delay: 0.6s; }
+
+        @keyframes msgEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-row { animation: msgEnter 0.22s ease-out; }
+
+        .mini-spinner {
+          width: 8px; height: 8px; border-radius: 50%;
+          border: 1.5px solid rgba(26,107,58,0.25); border-top-color: ${green};
+          animation: spin 0.7s linear infinite; display: inline-block;
+        }
 
         @media (max-width: 900px) {
           .app-sidebar {

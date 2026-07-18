@@ -7,6 +7,7 @@ import { CustomEase } from "gsap/CustomEase";
 import { useAuth } from "@/components/AuthProvider";
 import AuthModal from "@/components/AuthModal";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 gsap.registerPlugin(ScrollTrigger, CustomEase);
 
@@ -76,6 +77,7 @@ export default function Home() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const { isAnonymous, signOut, user } = useAuth();
+  const router = useRouter();
 
   const mono: React.CSSProperties = { fontFamily: "'Courier New', Courier, monospace" };
   const green = "#1a6b3a";
@@ -432,20 +434,30 @@ export default function Home() {
     };
   }, []);
 
-  const LOGOS = ["Next.js", "FastAPI", "LangChain", "Groq", "Cloudflare", "Supabase", "pgvector", "Docker", "Hugging Face", "Vercel"];
+  const REPO_URL = "https://github.com/AyushGurung18/agentic-ai";
+  const ARCHITECTURE_URL = `${REPO_URL}/blob/main/ARCHITECTURE.md`;
+
+  const NAV_LINKS: { label: string; href: string; external: boolean }[] = [
+    { label: "$ Architecture", href: ARCHITECTURE_URL, external: true },
+    { label: "How it works", href: "#how-it-works", external: false },
+    { label: "Edge Cache", href: "#features", external: false },
+    { label: "GitHub", href: REPO_URL, external: true },
+  ];
+
+  const LOGOS = ["Next.js", "FastAPI", "LangGraph", "Groq", "Cloudflare", "Supabase", "pgvector", "Docker", "Hugging Face", "Vercel"];
 
   const FEATURES = [
-    { label: "Dual-layer edge cache", desc: "KV for chat history + semantic cache at the Cloudflare edge. TTFT under 200ms." },
-    { label: "Semantic deduplication", desc: "BGE embeddings catch paraphrased questions. Same intent = same cached answer, zero LLM tokens spent." },
-    { label: "Origin shielding", desc: "X-Internal-Secret header on every proxied request. Direct hits to the FastAPI origin return 403 instantly." },
-    { label: "Swappable inference", desc: "One param swap routes between Groq LPU, Ollama local, or any OpenAI-compatible endpoint." },
+    { label: "Dual-layer edge cache", desc: "Cloudflare KV for chat history + a semantic cache check on every /chat request. Repeat/paraphrased questions skip the LLM entirely." },
+    { label: "Self-correcting retrieval", desc: "Hybrid search (BM25 + vector, RRF-fused) with a BGE reranker, graded by an LLM before generation even starts — CRAG catches bad retrievals early." },
+    { label: "Origin shielding", desc: "The Cloudflare Worker proxies every request to the FastAPI origin with its own timeout + retry handling, so a slow backend fails clean instead of hanging the client." },
+    { label: "Swappable inference", desc: "Intent-routed across Gemini, Groq, and NVIDIA, with a self-hosted vLLM (PagedAttention) fallback when no cloud API key is configured." },
   ];
 
   const STEPS = [
-    { label: "Upload your documents", detail: "PDF, markdown, or plain text — extracted clean via pymupdf4llm and chunked with configurable overlap." },
-    { label: "Edge embedding at request time", detail: "Cloudflare Worker runs @cf/baai/bge-small-en-v1.5 serverlessly. 384-dim vectors generated before the backend even wakes up." },
-    { label: "Semantic cache lookup", detail: "pgvector cosine distance query runs against the cache table. Similarity > 0.96 short-circuits the entire LLM pipeline." },
-    { label: "Groq LLM + RAG fallback", detail: "Cache miss? Top-K chunks from pgvector feed a history-aware LangChain prompt routed to Llama 3 on Groq LPUs." },
+    { label: "Upload your documents", detail: "PDF extracted via PyMuPDF, hierarchically chunked (parent + child) so retrieval stays precise without losing context." },
+    { label: "Local embedding + HNSW indexing", detail: "Chunks embedded with a local sentence-transformers model (384-dim) and indexed in Postgres/pgvector with HNSW for fast similarity search." },
+    { label: "Semantic cache lookup", detail: "The edge gateway checks a vector similarity cache before the request ever reaches the LLM pipeline — an exact or near-exact repeat question costs nothing." },
+    { label: "Agentic RAG pipeline", detail: "Cache miss? A LangGraph CRAG + Self-RAG graph retrieves, reranks, grades its own retrieval and generation, and rewrites the query if the answer isn't grounded." },
   ];
 
   return (
@@ -478,8 +490,16 @@ export default function Home() {
         </div>
 
         <div className="nav-links" style={{ display: "flex", gap: "1.8rem", fontSize: "0.78rem", color: "#3a5a3a" }}>
-          {["$ Architecture", "How it works", "Edge Cache", "GitHub", "Blog"].map((l) => (
-            <span key={l} style={{ cursor: "pointer" }}>{l}</span>
+          {NAV_LINKS.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              target={l.external ? "_blank" : undefined}
+              rel={l.external ? "noopener noreferrer" : undefined}
+              style={{ cursor: "pointer", color: "inherit", textDecoration: "none" }}
+            >
+              {l.label}
+            </a>
           ))}
         </div>
 
@@ -516,8 +536,17 @@ export default function Home() {
 
         {mobileNavOpen && (
           <div style={{ width: "100%", borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: "0.8rem", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-            {["$ Architecture", "How it works", "Edge Cache", "GitHub", "Blog"].map((l) => (
-              <span key={l} style={{ fontSize: "0.82rem", color: "#3a5a3a", cursor: "pointer", padding: "0.15rem 0" }}>{l}</span>
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                target={l.external ? "_blank" : undefined}
+                rel={l.external ? "noopener noreferrer" : undefined}
+                onClick={() => setMobileNavOpen(false)}
+                style={{ fontSize: "0.82rem", color: "#3a5a3a", cursor: "pointer", padding: "0.15rem 0", textDecoration: "none", display: "block" }}
+              >
+                {l.label}
+              </a>
             ))}
             <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.3rem" }}>
               {isAnonymous ? (
@@ -577,8 +606,8 @@ export default function Home() {
             lineHeight: 2, maxWidth: 360, marginBottom: "2rem", textTransform: "uppercase",
           }}>
             Drop any PDF. Ask anything.<br />
-            Edge-cached RAG with semantic dedup,<br />
-            Groq LPU inference, and pgvector.
+            Agentic CRAG + Self-RAG pipeline,<br />
+            multi-provider LLMs, and pgvector.
           </p>
 
           <div ref={ctaRef} style={{ display: "flex", flexDirection: "column", gap: "0.6rem", alignItems: "flex-start" }}>
@@ -596,16 +625,18 @@ export default function Home() {
                   {isAnonymous ? "Deploy free →" : "Go to Dashboard →"}
                 </button>
               </Link>
-              <button
-                onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, duration: 0.18 })}
-                onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.25 })}
-                style={{
-                  padding: "0.85rem 1.6rem", background: "transparent",
-                  border: "1px solid rgba(74,222,128,0.3)", borderRadius: 5,
-                  color: green, fontSize: "0.84rem", cursor: "pointer", ...mono,
-                }}>
-                View on GitHub
-              </button>
+              <a href={REPO_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                <button
+                  onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, duration: 0.18 })}
+                  onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.25 })}
+                  style={{
+                    padding: "0.85rem 1.6rem", background: "transparent",
+                    border: "1px solid rgba(74,222,128,0.3)", borderRadius: 5,
+                    color: green, fontSize: "0.84rem", cursor: "pointer", ...mono,
+                  }}>
+                  View on GitHub
+                </button>
+              </a>
             </div>
             <span style={{ fontSize: "0.65rem", color: "#166534", letterSpacing: "0.08em" }}>
               {isAnonymous ? "self-hosted · no credit card · MIT license" : `signed in as ${user?.email}`}
@@ -625,7 +656,7 @@ export default function Home() {
       <div ref={logosRef} style={{ borderTop: "1px solid rgba(0,0,0,0.09)", borderBottom: "1px solid rgba(0,0,0,0.09)", padding: "1.6rem 1.5rem", position: "relative", zIndex: 1 }}>
         <p style={{ textAlign: "center", fontSize: "0.65rem", letterSpacing: "0.16em", color: "#6a8a6a", marginBottom: "1.1rem" }}>
           PRODUCTION STACK · EVERY LAYER BATTLE-TESTED.{" "}
-          <span style={{ color: green, textDecoration: "underline", cursor: "pointer" }}>READ THE ARCHITECTURE BREAKDOWN →</span>
+          <a href={ARCHITECTURE_URL} target="_blank" rel="noopener noreferrer" style={{ color: green, textDecoration: "underline", cursor: "pointer" }}>READ THE ARCHITECTURE BREAKDOWN →</a>
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
           {LOGOS.map((logo, i) => (
@@ -645,12 +676,12 @@ export default function Home() {
           <StatCard value={200} label="TTFT at edge (ms)" suffix="ms" mono={mono} green={green} />
           <StatCard value={96} label="Semantic cache threshold" suffix="%" mono={mono} green={green} />
           <StatCard value={384} label="Embedding dimensions" suffix="" mono={mono} green={green} />
-          <StatCard value={3} label="Chunks retrieved per query" suffix="x" mono={mono} green={green} />
+          <StatCard value={5} label="Chunks retrieved per query" suffix="x" mono={mono} green={green} />
         </div>
       </section>
 
       {/* ── HOW IT WORKS ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "6rem 2.5rem", position: "relative", zIndex: 1 }}>
+      <section id="how-it-works" style={{ maxWidth: 1100, margin: "0 auto", padding: "6rem 2.5rem", position: "relative", zIndex: 1, scrollMarginTop: "5rem" }}>
         {(() => {
           const r = useRef<HTMLDivElement>(null);
           useReveal(r);
@@ -695,18 +726,20 @@ export default function Home() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 7rem", position: "relative", zIndex: 1 }}>
+      <section id="features" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 7rem", position: "relative", zIndex: 1, scrollMarginTop: "5rem" }}>
         <div className="reveal-up" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "3.5rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <div style={{ fontSize: "0.66rem", letterSpacing: "0.2em", color: green, marginBottom: "0.7rem" }}>[ WHAT MAKES IT FAST ]</div>
             <h2 style={{ fontSize: "clamp(1.4rem,3.5vw,2.6rem)", fontWeight: 900, color: "#1a2a1a", margin: 0, ...mono }}>Built for engineers<br />who hate wasted tokens.</h2>
           </div>
-          <button
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, duration: 0.18 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.28 })}
-            style={{ padding: "0.7rem 1.4rem", border: "none", background: green, color: "#fff", borderRadius: 3, fontSize: "0.78rem", cursor: "pointer", ...mono }}>
-            Read the full architecture →
-          </button>
+          <a href={ARCHITECTURE_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+            <button
+              onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, duration: 0.18 })}
+              onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, duration: 0.28 })}
+              style={{ padding: "0.7rem 1.4rem", border: "none", background: green, color: "#fff", borderRadius: 3, fontSize: "0.78rem", cursor: "pointer", ...mono }}>
+              Read the full architecture →
+            </button>
+          </a>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.2rem" }}>
           {FEATURES.map((f, i) => (
@@ -745,9 +778,9 @@ export default function Home() {
               ["Next.js + Vercel", "frontend layer"],
               ["Cloudflare Workers", "edge gateway"],
               ["Cloudflare KV + R2", "chat cache + file storage"],
-              ["FastAPI + LangChain", "backend orchestration"],
-              ["Groq LPU", "llama 3 inference"],
-              ["Supabase pgvector", "vector store + semantic cache"],
+              ["FastAPI + LangGraph", "agentic CRAG + Self-RAG"],
+              ["Gemini · Groq · NVIDIA", "+ self-hosted vLLM fallback"],
+              ["Supabase pgvector", "HNSW vector store + semantic cache"],
             ].map(([tech, role], i) => {
               const r = useRef(null);
               useEffect(() => {
@@ -795,6 +828,7 @@ export default function Home() {
                 Self-host in minutes. Edge-cached from request one. Swap any LLM. The chameleon never misses — neither will your inference pipeline.
               </p>
               <button
+                onClick={() => isAnonymous ? setAuthModalOpen(true) : router.push("/upload")}
                 onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.06, boxShadow: "0 0 40px rgba(34,197,94,0.4)", duration: 0.2 })}
                 onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, boxShadow: "0 0 24px rgba(34,197,94,0.2)", duration: 0.28 })}
                 style={{
@@ -803,7 +837,7 @@ export default function Home() {
                   cursor: "pointer", ...mono, letterSpacing: "0.04em",
                   boxShadow: "0 0 24px rgba(34,197,94,0.2)",
                 }}>
-                Start for free →
+                {isAnonymous ? "Start for free →" : "Go to Dashboard →"}
               </button>
             </div>
           );
@@ -818,8 +852,8 @@ export default function Home() {
         fontSize: "0.65rem", color: "#6a8a6a", letterSpacing: "0.1em",
         flexWrap: "wrap", gap: "0.5rem", position: "relative", zIndex: 1,
       }}>
-        <span>octo · EDGE-CACHED RAG ENGINE</span>
-        <span>© 2025 · FASTAPI + LANGCHAIN + GROQ + CLOUDFLARE</span>
+        <span>octo · AGENTIC RAG ENGINE</span>
+        <span>© 2026 · FASTAPI + LANGGRAPH + CLOUDFLARE</span>
         <span>MIT LICENSE · SELF-HOSTED · BUILT WITH 🌿</span>
       </footer>
 
@@ -827,6 +861,7 @@ export default function Home() {
 
       <style>{`
         * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         @media (max-width: 860px) {
           .hero-section {
             grid-template-columns: 1fr !important;
