@@ -9,6 +9,7 @@ type Message = {
   role: "user" | "ai";
   content: string;
   isStreaming?: boolean;
+  statusText?: string;
 };
 
 type Session = {
@@ -449,11 +450,48 @@ export default function App() {
 
         startTyping(aiId);
 
+        // The backend interleaves real per-stage status updates into the
+        // stream, each wrapped in \x1e (ASCII Record Separator) — a
+        // character that never occurs in normal generated text, so it's a
+        // safe, simple delimiter without needing a bigger protocol change.
+        // rawTail holds anything not yet resolved into either "definitely
+        // plain text" or "a complete status marker" — a marker can arrive
+        // split across two chunk reads, so a lone \x1e at the end of a
+        // chunk has to be held back until the next read might complete it.
+        let rawTail = "";
+        const STATUS_MARKER = /\x1e([^\x1e]*)\x1e/g;
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          streamingBufferRef.current += chunk;
+          rawTail += decoder.decode(value, { stream: true });
+
+          let cleaned = "";
+          let lastIndex = 0;
+          let match: RegExpExecArray | null;
+          STATUS_MARKER.lastIndex = 0;
+          while ((match = STATUS_MARKER.exec(rawTail)) !== null) {
+            cleaned += rawTail.slice(lastIndex, match.index);
+            const label = match[1];
+            setMessages(prev => prev.map(m => m.id === aiId ? { ...m, statusText: label } : m));
+            lastIndex = STATUS_MARKER.lastIndex;
+          }
+          rawTail = rawTail.slice(lastIndex);
+
+          const openIdx = rawTail.indexOf("\x1e");
+          if (openIdx === -1) {
+            cleaned += rawTail;
+            rawTail = "";
+          } else {
+            cleaned += rawTail.slice(0, openIdx);
+            rawTail = rawTail.slice(openIdx);
+          }
+
+          if (cleaned) {
+            streamingBufferRef.current += cleaned;
+            // Real content has started — the status line has done its job.
+            setMessages(prev => prev.map(m => m.id === aiId && m.statusText ? { ...m, statusText: undefined } : m));
+          }
         }
 
         streamingActiveRef.current = false;
@@ -739,11 +777,18 @@ export default function App() {
                   </div>
                   <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center" }}>
                     {msg.isStreaming && msg.content === "" ? (
-                      <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
-                        {[0, 0.2, 0.4].map((d, i) => (
-                          <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
-                        ))}
-                      </span>
+                      msg.statusText ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.85 }}>
+                          <span className="status-pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: green, display: "inline-block", flexShrink: 0 }} />
+                          {msg.statusText}
+                        </span>
+                      ) : (
+                        <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
+                          {[0, 0.2, 0.4].map((d, i) => (
+                            <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
+                          ))}
+                        </span>
+                      )
                     ) : (
                       <>
                         {renderFormattedContent(msg.content)}
@@ -898,6 +943,8 @@ export default function App() {
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
         @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes statusPulse { 0%, 100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+        .status-pulse-dot { animation: statusPulse 1.1s ease-in-out infinite; }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
