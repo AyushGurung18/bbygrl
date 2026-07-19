@@ -729,23 +729,50 @@ export default function App() {
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem" }}>
               <div style={{ width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
                 <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
-                  <ellipse cx="32" cy="27" rx="17" ry="15" fill={cardBg} stroke={green} strokeWidth="1.5" />
-                  <circle cx="26" cy="25" r="2" fill={green} />
-                  <circle cx="38" cy="25" r="2" fill={green} />
-                  <path d="M26 32 Q32 36 38 32" stroke={green} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                  {/* Mantle — a rounded dome rather than a plain ellipse, so it reads as an
+                      octopus head instead of a smiley-face oval. */}
+                  <path
+                    d="M15 32 C13 18 21 8 32 8 C43 8 51 18 49 32 C48 40 41 44 32 44 C23 44 16 40 15 32 Z"
+                    fill={cardBg}
+                    stroke={green}
+                    strokeWidth="1.5"
+                  />
+                  <circle cx="26" cy="25" r="1.8" fill={green} />
+                  <circle cx="38" cy="25" r="1.8" fill={green} />
                   {[0, 1, 2, 3, 4, 5].map((i) => {
-                    const baseX = 13 + i * 7.6;
+                    const baseX = 15 + i * 6.8;
+                    const baseY = 41 + Math.abs(i - 2.5) * 0.8;
+                    const lenScale = 1 - Math.abs(i - 2.5) * 0.05;
+                    // Outward sway that continues in one direction (no reversal),
+                    // so the arm trails down and out instead of hooking back in.
+                    const sway = (i - 2.5) * 1.6;
+                    const midX = baseX + sway * 0.6;
+                    const midY = baseY + 10 * lenScale;
+                    const tipX = baseX + sway;
+                    const tipY = baseY + 20 * lenScale;
                     return (
-                      <path
+                      <g
                         key={i}
                         className={`tentacle tentacle-${i}`}
-                        d={`M${baseX} 39 Q${baseX - 2} 48 ${baseX + 2} 54 T${baseX + 3} 60`}
-                        stroke={green}
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        fill="none"
-                        style={{ transformOrigin: `${baseX}px 39px` } as React.CSSProperties}
-                      />
+                        style={{ transformOrigin: `${baseX}px ${baseY}px` } as React.CSSProperties}
+                      >
+                        <path
+                          d={`M${baseX} ${baseY} Q${midX} ${midY} ${tipX} ${tipY}`}
+                          stroke={green}
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                        <path
+                          d={`M${baseX} ${baseY} Q${midX} ${midY} ${tipX} ${tipY}`}
+                          stroke={cardBg}
+                          strokeWidth="0.9"
+                          strokeLinecap="round"
+                          fill="none"
+                          opacity={0.5}
+                        />
+                        <circle cx={(baseX + midX) / 2} cy={(baseY + midY) / 2} r={0.8} fill={green} opacity={0.4} />
+                      </g>
                     );
                   })}
                 </svg>

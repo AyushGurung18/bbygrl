@@ -613,23 +613,43 @@ export default function Home() {
       };
     }
 
-    const drawOctopus = () => {
+    const drawOctopus = (wig: number) => {
       const armAngles = [-2.5, -1.9, -1.3, -0.7, 0.7, 1.3, 1.9, 2.5];
       for (let i = 0; i < 8; i++) {
         const ang = armAngles[i];
         const ox = mantleX + Math.cos(ang) * 46;
         const oy = mantleY + 26 + Math.sin(ang) * 30;
-        let tipX = ox + Math.cos(ang) * 92;
-        let tipY = oy + Math.sin(ang) * 60 + 40;
+        const idleTipX = ox + Math.cos(ang) * 92;
+        const idleTipY = oy + Math.sin(ang) * 60 + 40;
+        let tipX = idleTipX;
+        let tipY = idleTipY;
 
         // Three of the eight arms reach for the three targets; the rest sway idly.
-        if (i < 3 && (ophase === "reach" || ophase === "grasp" || ophase === "retract")) {
+        // Every branch's start point matches the previous phase's end point, so
+        // the tip position is continuous across phase changes — no teleporting.
+        if (i < 3) {
           const target = targets[i];
-          const p = ophase === "retract" ? 1 - reachProg : reachProg;
-          tipX = ox + (target.x - ox) * p;
-          tipY = oy + (target.y - oy) * p;
+          if (ophase === "reach") {
+            const p = reachProg;
+            tipX = idleTipX + (target.x - idleTipX) * p;
+            tipY = idleTipY + (target.y - idleTipY) * p;
+          } else if (ophase === "grasp") {
+            tipX = target.x;
+            tipY = target.y;
+          } else if (ophase === "retract") {
+            const p = reachProg;
+            tipX = target.x + (ox - target.x) * p;
+            tipY = target.y + (oy - target.y) * p;
+          } else if (ophase === "synth") {
+            tipX = ox;
+            tipY = oy;
+          } else if (ophase === "reset") {
+            const p = Math.min(1, ophaseTimer / 60);
+            tipX = ox + (idleTipX - ox) * p;
+            tipY = oy + (idleTipY - oy) * p;
+          }
         }
-        drawArm(ox, oy, tipX, tipY, 15, ophase === "idle" || ophase === "reset" ? 22 : 8);
+        drawArm(ox, oy, tipX, tipY, 15, wig);
       }
 
       // Mantle (head/body)
@@ -691,9 +711,13 @@ export default function Home() {
     const otick = () => {
       otime++;
       ophaseTimer++;
-      eyeTarget2 = ophase === "idle" || ophase === "reset"
+      const desiredEyeTarget = ophase === "idle" || ophase === "reset"
         ? { x: mantleX + Math.sin(otime * 0.02) * 40, y: mantleY - 10 }
         : { x: targets[0].x, y: targets[0].y };
+      eyeTarget2 = {
+        x: eyeTarget2.x + (desiredEyeTarget.x - eyeTarget2.x) * 0.06,
+        y: eyeTarget2.y + (desiredEyeTarget.y - eyeTarget2.y) * 0.06,
+      };
       blink = (otime % 210 < 6) ? 1 : 0;
 
       switch (ophase) {
@@ -721,9 +745,18 @@ export default function Home() {
           break;
       }
 
+      // A single continuous 0→1 value driving how "tucked in" the arms are —
+      // eases through every phase instead of hard-switching, so the tentacle
+      // width never pops.
+      let engagement = 0;
+      if (ophase === "reach") engagement = reachProg;
+      else if (ophase === "grasp" || ophase === "retract" || ophase === "synth") engagement = 1;
+      else if (ophase === "reset") engagement = 1 - Math.min(1, ophaseTimer / 60);
+      const wig = 22 - 14 * engagement;
+
       octx.clearRect(0, 0, OW, OH);
       drawReef();
-      drawOctopus();
+      drawOctopus(wig);
 
       // Target orbs: visible before they're grasped, and while merging back
       targets.forEach((t, i) => {
