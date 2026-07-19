@@ -73,6 +73,8 @@ export default function Home() {
   const statsRef = useRef(null);
 
   const [statusLabel, setStatusLabel] = useState("< tracking prey />");
+  const octoCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [octoStatusLabel, setOctoStatusLabel] = useState("< idle />");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
@@ -428,8 +430,334 @@ export default function Home() {
       });
     });
 
+    // ── OCTOPUS CANVAS ──
+    // Same illustration technique as the chameleon above (bezier shapes,
+    // halftone dot-shading, a tracking eye, a phased state-machine loop) —
+    // this one depicts the agentic side: multiple arms independently
+    // fetching/checking/answering at once, then synthesizing into one
+    // result, instead of a single strike.
+    const octoCanvas = octoCanvasRef.current!;
+    const octx = octoCanvas.getContext("2d")!;
+    const OW = 680, OH = 420;
+    octoCanvas.width = OW;
+    octoCanvas.height = OH;
+
+    let raf2: number;
+    let otime = 0;
+    type OctoPhase = "idle" | "reach" | "grasp" | "retract" | "synth" | "reset";
+    let ophase: OctoPhase = "idle";
+    let ophaseTimer = 0;
+    let reachProg = 0;   // 0 -> 1, arms extending to targets
+    let synthProg = 0;   // 0 -> 1, the three items merging into one
+    let blink = 0;
+
+    const mantleX = 340, mantleY = 190;
+    const targetsHome = [
+      { x: 118, y: 108, col: "#3a7a5a", label: "doc" },
+      { x: 128, y: 300, col: "#6a4a8a", label: "check" },
+      { x: 560, y: 130, col: "#7a5a2a", label: "answer" },
+    ];
+    const targets = targetsHome.map(t => ({ ...t }));
+    let eyeTarget2 = { x: mantleX, y: mantleY };
+
+    const ohalftone = (x: number, y: number, w: number, h: number, spacing: number, col: string, alpha: number) => {
+      octx.save();
+      octx.globalAlpha = alpha;
+      octx.fillStyle = col;
+      for (let dx = 0; dx <= w; dx += spacing) {
+        for (let dy = 0; dy <= h; dy += spacing) {
+          const nx = (dx / w - 0.5) * 2;
+          const ny = (dy / h - 0.5) * 2;
+          const dist = Math.sqrt(nx * nx + ny * ny);
+          const r = Math.max(0.4, (1 - dist) * spacing * 0.38);
+          octx.beginPath();
+          octx.arc(x + dx, y + dy, r, 0, Math.PI * 2);
+          octx.fill();
+        }
+      }
+      octx.restore();
+    };
+
+    const drawReef = () => {
+      // Deep-water gradient — cool teal/indigo, distinct from the
+      // chameleon's warm forest tones so the two read as separate scenes.
+      const grad = octx.createLinearGradient(0, 0, 0, OH);
+      grad.addColorStop(0, "#e2ddd2");
+      grad.addColorStop(1, "#d6d0c2");
+      octx.fillStyle = grad;
+      octx.fillRect(0, 0, OW, OH);
+
+      // Drifting particulate, same dot-field trick as the chameleon's dust
+      for (let x = 0; x <= OW; x += 11) {
+        for (let y = 0; y <= OH; y += 11) {
+          const dx = x / OW - 0.5, dy = y / OH - 0.5;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          const r = Math.sin(x * 0.05 + otime * 0.01) * Math.cos(y * 0.05 - otime * 0.008);
+          if (r > 0.3) {
+            octx.globalAlpha = 0.07;
+            octx.fillStyle = "#2a5a6a";
+            octx.beginPath();
+            octx.arc(x, y, d * 6, 0, Math.PI * 2);
+            octx.fill();
+          }
+        }
+      }
+      octx.globalAlpha = 1;
+
+      // Seafloor
+      octx.fillStyle = "#4a5a52";
+      octx.beginPath();
+      octx.moveTo(0, 360);
+      octx.bezierCurveTo(160, 348, 400, 352, OW, 340);
+      octx.lineTo(OW, OH);
+      octx.lineTo(0, OH);
+      octx.closePath();
+      octx.fill();
+
+      // Kelp fronds, echoing the chameleon scene's leaves
+      const kelp = (kx: number, ky: number, h: number, sway: number, col: string) => {
+        octx.save();
+        octx.strokeStyle = col;
+        octx.lineWidth = 7;
+        octx.lineCap = "round";
+        octx.beginPath();
+        octx.moveTo(kx, ky);
+        octx.bezierCurveTo(
+          kx + sway, ky - h * 0.4,
+          kx - sway, ky - h * 0.7,
+          kx + sway * 0.6, ky - h
+        );
+        octx.stroke();
+        octx.restore();
+      };
+      const sw = Math.sin(otime * 0.02) * 10;
+      kelp(50, 362, 130, sw, "#3a5a44");
+      kelp(78, 366, 95, -sw * 0.8, "#345a48");
+      kelp(612, 358, 140, -sw, "#3a5a44");
+      kelp(640, 364, 100, sw * 0.7, "#345a48");
+    };
+
+    const drawTargetIcon = (t: { x: number; y: number; col: string; label: string }, scale: number, alpha: number) => {
+      octx.save();
+      octx.globalAlpha = alpha;
+      octx.translate(t.x, t.y);
+      octx.scale(scale, scale);
+      octx.fillStyle = t.col;
+      octx.beginPath();
+      octx.arc(0, 0, 16, 0, Math.PI * 2);
+      octx.fill();
+      octx.globalAlpha = alpha * 0.5;
+      octx.beginPath();
+      octx.arc(0, 0, 22, 0, Math.PI * 2);
+      octx.fill();
+      octx.globalAlpha = alpha;
+      octx.fillStyle = "rgba(255,255,255,0.85)";
+      if (t.label === "doc") {
+        octx.fillRect(-6, -8, 12, 16);
+        octx.fillStyle = t.col;
+        octx.fillRect(-4, -5, 8, 1.4);
+        octx.fillRect(-4, -1, 8, 1.4);
+        octx.fillRect(-4, 3, 5, 1.4);
+      } else if (t.label === "check") {
+        octx.beginPath();
+        octx.moveTo(-6, 0);
+        octx.lineTo(-1, 6);
+        octx.lineTo(7, -7);
+        octx.strokeStyle = "rgba(255,255,255,0.85)";
+        octx.lineWidth = 3;
+        octx.lineCap = "round";
+        octx.lineJoin = "round";
+        octx.stroke();
+      } else {
+        octx.beginPath();
+        octx.moveTo(-7, 5);
+        octx.lineTo(0, -7);
+        octx.lineTo(7, 5);
+        octx.closePath();
+        octx.fill();
+      }
+      octx.restore();
+    };
+
+    const drawArm = (originX: number, originY: number, tipX: number, tipY: number, baseW: number, wig: number) => {
+      const midX = (originX + tipX) / 2 + Math.sin(otime * 0.05 + originX) * wig;
+      const midY = (originY + tipY) / 2 + Math.cos(otime * 0.045 + originY) * (wig * 0.6);
+      const segs = 5;
+      for (let i = 0; i < segs; i++) {
+        const t0 = i / segs, t1 = (i + 1) / segs;
+        const p0 = bezPoint(originX, originY, midX, midY, tipX, tipY, t0);
+        const p1 = bezPoint(originX, originY, midX, midY, tipX, tipY, t1);
+        octx.strokeStyle = "#3a2e52";
+        octx.lineWidth = baseW * (1 - t0 * 0.78);
+        octx.lineCap = "round";
+        octx.beginPath();
+        octx.moveTo(p0.x, p0.y);
+        octx.lineTo(p1.x, p1.y);
+        octx.stroke();
+        if (i > 0) {
+          const suckerT = t0;
+          const sp = bezPoint(originX, originY, midX, midY, tipX, tipY, suckerT);
+          octx.fillStyle = "rgba(200,168,232,0.55)";
+          octx.beginPath();
+          octx.arc(sp.x, sp.y, Math.max(1.6, baseW * 0.16 * (1 - t0 * 0.7)), 0, Math.PI * 2);
+          octx.fill();
+        }
+      }
+    };
+
+    function bezPoint(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, t: number) {
+      const u = 1 - t;
+      return {
+        x: u * u * x0 + 2 * u * t * x1 + t * t * x2,
+        y: u * u * y0 + 2 * u * t * y1 + t * t * y2,
+      };
+    }
+
+    const drawOctopus = () => {
+      const armAngles = [-2.5, -1.9, -1.3, -0.7, 0.7, 1.3, 1.9, 2.5];
+      for (let i = 0; i < 8; i++) {
+        const ang = armAngles[i];
+        const ox = mantleX + Math.cos(ang) * 46;
+        const oy = mantleY + 26 + Math.sin(ang) * 30;
+        let tipX = ox + Math.cos(ang) * 92;
+        let tipY = oy + Math.sin(ang) * 60 + 40;
+
+        // Three of the eight arms reach for the three targets; the rest sway idly.
+        if (i < 3 && (ophase === "reach" || ophase === "grasp" || ophase === "retract")) {
+          const target = targets[i];
+          const p = ophase === "retract" ? 1 - reachProg : reachProg;
+          tipX = ox + (target.x - ox) * p;
+          tipY = oy + (target.y - oy) * p;
+        }
+        drawArm(ox, oy, tipX, tipY, 15, ophase === "idle" || ophase === "reset" ? 22 : 8);
+      }
+
+      // Mantle (head/body)
+      ohalftone(mantleX - 78, mantleY - 78, 156, 130, 7, "#2a1e42", 0.16);
+      octx.fillStyle = "#4a3a68";
+      octx.beginPath();
+      octx.moveTo(mantleX - 70, mantleY + 10);
+      octx.bezierCurveTo(mantleX - 78, mantleY - 55, mantleX - 30, mantleY - 92, mantleX, mantleY - 90);
+      octx.bezierCurveTo(mantleX + 32, mantleY - 92, mantleX + 80, mantleY - 55, mantleX + 72, mantleY + 10);
+      octx.bezierCurveTo(mantleX + 60, mantleY + 42, mantleX - 48, mantleY + 42, mantleX - 70, mantleY + 10);
+      octx.closePath();
+      octx.fill();
+
+      // Mantle spots, echoing the chameleon's spine ridge rhythm
+      octx.fillStyle = "#3a2e52";
+      for (let i = 0; i < 6; i++) {
+        const sx = mantleX - 44 + i * 17;
+        const sy = mantleY - 38 + Math.sin(i * 0.9 + otime * 0.02) * 6;
+        octx.beginPath();
+        octx.arc(sx, sy, 4.5 - (i % 3) * 0.8, 0, Math.PI * 2);
+        octx.fill();
+      }
+
+      // Eyes (paired, same tracking technique as the chameleon)
+      const eyeDX = 24, eyeY = mantleY - 22;
+      [-1, 1].forEach((side) => {
+        const ex = mantleX + side * eyeDX, ey = eyeY;
+        octx.fillStyle = "#241a3a";
+        octx.beginPath();
+        octx.arc(ex, ey, 15, 0, Math.PI * 2);
+        octx.fill();
+        if (blink < 0.5) {
+          octx.fillStyle = "#c8a8e8";
+          octx.beginPath();
+          octx.arc(ex, ey, 10.5, 0, Math.PI * 2);
+          octx.fill();
+          const ang = Math.atan2(eyeTarget2.y - ey, eyeTarget2.x - ex);
+          const px = ex + Math.cos(ang) * 4, py = ey + Math.sin(ang) * 3.5;
+          octx.fillStyle = "#181022";
+          octx.beginPath();
+          octx.arc(px, py, 5.2, 0, Math.PI * 2);
+          octx.fill();
+          octx.fillStyle = "rgba(255,255,250,0.8)";
+          octx.beginPath();
+          octx.arc(px - 1.6, py - 1.8, 1.8, 0, Math.PI * 2);
+          octx.fill();
+        } else {
+          octx.strokeStyle = "#c8a8e8";
+          octx.lineWidth = 2.4;
+          octx.lineCap = "round";
+          octx.beginPath();
+          octx.moveTo(ex - 8, ey);
+          octx.lineTo(ex + 8, ey);
+          octx.stroke();
+        }
+      });
+    };
+
+    const otick = () => {
+      otime++;
+      ophaseTimer++;
+      eyeTarget2 = ophase === "idle" || ophase === "reset"
+        ? { x: mantleX + Math.sin(otime * 0.02) * 40, y: mantleY - 10 }
+        : { x: targets[0].x, y: targets[0].y };
+      blink = (otime % 210 < 6) ? 1 : 0;
+
+      switch (ophase) {
+        case "idle":
+          if (ophaseTimer > 110) { ophase = "reach"; ophaseTimer = 0; reachProg = 0; setOctoStatusLabel("< dispatching tools... />"); }
+          break;
+        case "reach":
+          reachProg = Math.min(1, reachProg + 0.045);
+          if (reachProg >= 1) { ophase = "grasp"; ophaseTimer = 0; setOctoStatusLabel("< retrieve + verify + draft />"); }
+          break;
+        case "grasp":
+          if (ophaseTimer > 35) { ophase = "retract"; ophaseTimer = 0; reachProg = 0; setOctoStatusLabel("< merging results... />"); }
+          break;
+        case "retract":
+          reachProg = Math.min(1, reachProg + 0.05);
+          synthProg = reachProg;
+          if (reachProg >= 1) { ophase = "synth"; ophaseTimer = 0; setOctoStatusLabel("< answer ready />"); }
+          break;
+        case "synth":
+          if (ophaseTimer > 90) { ophase = "reset"; ophaseTimer = 0; }
+          break;
+        case "reset":
+          synthProg = Math.max(0, synthProg - 0.04);
+          if (ophaseTimer > 60) { ophase = "idle"; ophaseTimer = 0; synthProg = 0; setOctoStatusLabel("< idle />"); }
+          break;
+      }
+
+      octx.clearRect(0, 0, OW, OH);
+      drawReef();
+      drawOctopus();
+
+      // Target orbs: visible before they're grasped, and while merging back
+      targets.forEach((t, i) => {
+        if (i >= 3) return;
+        const grabbed = ophase === "grasp" || (ophase === "retract" && reachProg < 1);
+        const hidden = ophase === "synth" || ophase === "reset";
+        if (hidden) return;
+        drawTargetIcon(t, grabbed ? 0.85 : 1, 1);
+      });
+
+      // Synthesized answer orb — the three merge into one near the mouth
+      if (synthProg > 0 || ophase === "synth") {
+        const sx = mantleX, sy = mantleY - 8;
+        octx.save();
+        octx.globalAlpha = ophase === "synth" ? 1 : synthProg;
+        const pulse = ophase === "synth" ? 1 + Math.sin(otime * 0.15) * 0.08 : 1;
+        octx.fillStyle = "#c8a8e8";
+        octx.beginPath();
+        octx.arc(sx, sy, 14 * pulse, 0, Math.PI * 2);
+        octx.fill();
+        octx.globalAlpha *= 0.4;
+        octx.beginPath();
+        octx.arc(sx, sy, 22 * pulse, 0, Math.PI * 2);
+        octx.fill();
+        octx.restore();
+      }
+
+      raf2 = requestAnimationFrame(otick);
+    };
+    otick();
+
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf2);
       ScrollTrigger.getAll().forEach((t) => t.kill());
     };
   }, []);
@@ -722,6 +1050,30 @@ export default function Home() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* ── AGENTIC ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 7rem", position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", flexWrap: "wrap-reverse", gap: "3rem", alignItems: "center", justifyContent: "space-between" }}>
+          <div className="reveal-up" style={{ flex: "1 1 320px", maxWidth: 420 }}>
+            <div style={{ fontSize: "0.66rem", letterSpacing: "0.2em", color: green, marginBottom: "0.7rem" }}>[ AGENTIC, NOT JUST RAG ]</div>
+            <h2 style={{ fontSize: "clamp(1.4rem,3.5vw,2.6rem)", fontWeight: 900, color: "#1a2a1a", margin: "0 0 1rem", ...mono }}>
+              One strike isn&apos;t<br /><span style={{ color: green }}>enough. Send arms.</span>
+            </h2>
+            <p style={{ fontSize: "0.78rem", color: "#5a7a5a", lineHeight: 1.9, letterSpacing: "0.02em" }}>
+              The chameleon is one precise strike — that&apos;s retrieval. The octopus is the agent loop:
+              multiple arms working at once — retrieve, grade, draft — each independently, before
+              everything gets pulled back and synthesized into a single answer. Corrective RAG and
+              Self-RAG in one picture.
+            </p>
+          </div>
+          <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-start", flex: "1 1 400px" }}>
+            <canvas ref={octoCanvasRef} style={{ width: "100%", maxWidth: 560, height: "auto", display: "block", borderRadius: 12 }} />
+            <div style={{ fontSize: "0.65rem", letterSpacing: "0.12em", color: green, opacity: 0.55, marginTop: "0.5rem", ...mono }}>
+              {octoStatusLabel}
+            </div>
+          </div>
         </div>
       </section>
 
