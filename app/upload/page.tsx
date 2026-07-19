@@ -46,7 +46,7 @@ export default function App() {
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-  const { user, signOut, getToken, isAnonymous } = useAuth();
+  const { user, signOut, getToken, isAnonymous, isLoading: authLoading } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
@@ -155,7 +155,18 @@ export default function App() {
     } catch { }
   }, [API, authHeaders]);
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  useEffect(() => {
+    // Wait for the auth bootstrap (session restore, or anonymous sign-in for
+    // a first-time visitor) to actually finish before fetching. Firing this
+    // immediately on mount raced ahead of that — getToken() came back empty,
+    // the request went out with no Authorization header, and the backend
+    // silently fell back to a shared dev identity with no sessions of its
+    // own. Nothing ever re-fetched afterward, so the sidebar looked empty
+    // until some other action (e.g. sending a message) happened to trigger
+    // a re-render that coincided with auth finally being ready.
+    if (authLoading) return;
+    fetchSessions();
+  }, [authLoading, fetchSessions]);
 
   const loadMessagesForSession = useCallback(async (sessionId: string, mountedCheck: () => boolean) => {
     setIsLoadingMessages(true);
@@ -371,16 +382,29 @@ export default function App() {
     if ((!inputVal.trim() && !pendingFile) || isAnswering || isUploading) return;
     setIsAnswering(true);
 
+    const q = inputVal.trim();
+    setInputVal("");
+
+    // Show the user's own message immediately, before any network round-trip
+    // (session creation, upload) — previously this waited until after both
+    // of those resolved, so the screen sat on the empty state with zero
+    // feedback, then the upload's own "indexed successfully" AI message
+    // would appear before the user's message ever showed up. Nothing should
+    // ever delay the user seeing their own message.
+    if (q) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: q }]);
+    }
+
     let sid = activeId;
     let aiId = "";
     try {
       if (!sid) {
-        const newSession = await createSession(inputVal.slice(0, 40) || "New Chat");
+        const newSession = await createSession(q.slice(0, 40) || "New Chat");
         sid = newSession.id;
       } else {
         const session = sessions.find(s => s.id === sid);
         if (session && (!session.title || session.title === "New Chat") && messages.length === 0) {
-          const newTitle = inputVal.slice(0, 40);
+          const newTitle = q.slice(0, 40);
           fetch(`${API}/sessions/${sid}/title?title=${encodeURIComponent(newTitle)}`, {
             method: "PATCH",
             headers: await authHeaders(),
@@ -392,17 +416,15 @@ export default function App() {
       if (pendingFile) {
         const uploaded = await uploadFile(pendingFile, sid!);
         if (!uploaded) return;
-        if (!inputVal.trim()) return;
+        if (!q) return;
       }
 
-      const q = inputVal.trim();
-      setInputVal("");
+      if (!q) return;
 
-      const userMsg: Message = { id: Date.now().toString(), role: "user", content: q };
       aiId = (Date.now() + 1).toString();
       const aiMsg: Message = { id: aiId, role: "ai", content: "", isStreaming: true };
 
-      setMessages(prev => [...prev, userMsg, aiMsg]);
+      setMessages(prev => [...prev, aiMsg]);
 
       const res = await fetch(`${API}/chat`, {
         method: "POST",
@@ -451,9 +473,22 @@ export default function App() {
       }
 
     } catch (err) {
-      setMessages(prev => prev.map(m =>
-        m.id === aiId ? { ...m, content: m.content + "\n\n[Error: Connection Failed]", isStreaming: false } : m
-      ));
+      setMessages(prev => {
+        // aiId is only set once the chat request actually starts — a failure
+        // before that (session creation, upload) has no message to attach
+        // the error to, so it needs its own bubble instead of silently
+        // vanishing (which is what happened before this check existed).
+        if (!aiId || !prev.some(m => m.id === aiId)) {
+          return [...prev, {
+            id: Date.now().toString(),
+            role: "ai",
+            content: "[Error: Connection Failed]",
+          }];
+        }
+        return prev.map(m =>
+          m.id === aiId ? { ...m, content: m.content + "\n\n[Error: Connection Failed]", isStreaming: false } : m
+        );
+      });
     } finally {
       setIsAnswering(false);
     }
