@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import AuthModal from "@/components/AuthModal";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Message = {
   id: string;
@@ -659,40 +661,76 @@ export default function App() {
     }
   };
 
-  const renderFormattedContent = (content: string) => {
-    const regex = /(\*?_?\*\*[^*_]+\*\*_?\*?|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
-    const parts = content.split(regex);
-    return parts.map((part, i) => {
-      if (!part) return null;
-      if (
-        (part.startsWith('*_**') && part.endsWith('**_*')) ||
-        (part.startsWith('**_*') && part.endsWith('*_**')) ||
-        (part.startsWith('***') && part.endsWith('***')) ||
-        (part.startsWith('**_') && part.endsWith('_**')) ||
-        (part.startsWith('_**') && part.endsWith('**_'))
-      ) {
-        const clean = part
-          .replace(/^(\*_*\*|\*\*_\*|\*\*\*|_\*\*|\*\*_\*?)/, "")
-          .replace(/(\*_\*\*|\*\*_\*|\*\*\*|_\*\*|\*\*_\*?)$/, "");
-        return <strong key={i}><em>{clean}</em></strong>;
-      }
-      if (part.startsWith('**') && part.endsWith('**')) {
-        const clean = part.slice(2, -2);
-        return <strong key={i}>{clean}</strong>;
-      }
-      if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
-        const clean = part.slice(1, -1);
-        return <em key={i}>{clean}</em>;
-      }
-      return part;
-    });
-  };
-
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
   const bg = "#e6e1d8";
   const green = "#1a6b3a";
   const cardBg = "#dedad0";
   const borderCol = "rgba(0,0,0,0.10)";
+
+  // Was a hand-rolled regex that only caught **bold**/*italic* — every
+  // list, code block, link, and heading the LLM actually outputs rendered
+  // as flat unstyled text. react-markdown + remark-gfm handles the full
+  // surface (lists, tables, code, blockquotes, links) properly; these
+  // overrides just keep every element on-theme with the rest of the app
+  // instead of using react-markdown's unstyled defaults.
+  const getMarkdownComponents = (isUser: boolean): React.ComponentProps<typeof ReactMarkdown>["components"] => {
+    const linkColor = isUser ? "#fff" : green;
+    const subtleBorder = isUser ? "rgba(255,255,255,0.28)" : borderCol;
+    const inlineCodeBg = isUser ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.07)";
+    return {
+      p: ({ children }) => <p style={{ margin: "0 0 0.65em 0" }}>{children}</p>,
+      strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+      em: ({ children }) => <em>{children}</em>,
+      ul: ({ children }) => <ul style={{ margin: "0.3em 0 0.65em", paddingLeft: "1.4em", display: "flex", flexDirection: "column", gap: "0.28em" }}>{children}</ul>,
+      ol: ({ children }) => <ol style={{ margin: "0.3em 0 0.65em", paddingLeft: "1.5em", display: "flex", flexDirection: "column", gap: "0.28em" }}>{children}</ol>,
+      li: ({ children }) => <li style={{ lineHeight: 1.7 }}>{children}</li>,
+      a: ({ href, children }) => (
+        <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: "2px" }}>
+          {children}
+        </a>
+      ),
+      blockquote: ({ children }) => (
+        <blockquote style={{ borderLeft: `3px solid ${linkColor}`, paddingLeft: "0.8em", margin: "0.5em 0", opacity: 0.85, fontStyle: "italic" }}>
+          {children}
+        </blockquote>
+      ),
+      h1: ({ children }) => <div style={{ fontWeight: 900, fontSize: "1.12em", margin: "0.5em 0 0.35em" }}>{children}</div>,
+      h2: ({ children }) => <div style={{ fontWeight: 900, fontSize: "1.05em", margin: "0.5em 0 0.3em" }}>{children}</div>,
+      h3: ({ children }) => <div style={{ fontWeight: 700, fontSize: "1em", letterSpacing: "0.03em", margin: "0.5em 0 0.25em" }}>{children}</div>,
+      hr: () => <hr style={{ border: "none", borderTop: `1px solid ${subtleBorder}`, margin: "0.8em 0" }} />,
+      code: ({ className, children }) => {
+        const isBlock = Boolean(className); // fenced code blocks carry a language className; inline code doesn't
+        if (!isBlock) {
+          return (
+            <code style={{ background: inlineCodeBg, padding: "0.15em 0.4em", borderRadius: 3, fontSize: "0.88em" }}>
+              {children}
+            </code>
+          );
+        }
+        return <code>{children}</code>;
+      },
+      pre: ({ children }) => (
+        <pre style={{
+          background: "#1a2a1a", color: "#e8f5e9", padding: "0.8em 1em", borderRadius: 6,
+          overflowX: "auto", margin: "0.5em 0", fontSize: "0.8em", lineHeight: 1.6,
+          border: `1px solid ${subtleBorder}`,
+        }}>
+          {children}
+        </pre>
+      ),
+      table: ({ children }) => (
+        <div style={{ overflowX: "auto", margin: "0.5em 0" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.85em" }}>{children}</table>
+        </div>
+      ),
+      th: ({ children }) => (
+        <th style={{ border: `1px solid ${subtleBorder}`, padding: "0.35em 0.6em", textAlign: "left", background: isUser ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.04)", fontWeight: 700 }}>
+          {children}
+        </th>
+      ),
+      td: ({ children }) => <td style={{ border: `1px solid ${subtleBorder}`, padding: "0.35em 0.6em" }}>{children}</td>,
+    };
+  };
 
   return (
     <div style={{ display: "flex", height: "100dvh", width: "100%", background: bg, overflow: "hidden", position: "relative", ...mono }}>
@@ -954,7 +992,9 @@ export default function App() {
                       )
                     ) : (
                       <>
-                        {renderFormattedContent(msg.content)}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(msg.role === "user")}>
+                          {msg.content}
+                        </ReactMarkdown>
                         {msg.isStreaming && msg.content !== "" && (
                           <span style={{ display: "inline-block", width: 7, height: 13, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
                         )}
