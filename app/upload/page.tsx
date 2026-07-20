@@ -169,6 +169,25 @@ export default function App() {
     fetchSessions();
   }, [authLoading, fetchSessions]);
 
+  useEffect(() => {
+    // The sidebar's session list otherwise only ever changes via targeted
+    // local edits (prepend on create, filter on delete) — a tab left open
+    // across a backend-side change (e.g. the DB getting cleared) keeps
+    // showing whatever was in memory, and any later local edit (like
+    // attaching a file, which prepends onto that stale array) makes the
+    // old entries visibly reappear alongside the new one. Refetching the
+    // real list whenever the tab regains focus keeps it honest without
+    // needing to poll continuously.
+    const onFocus = () => { if (!authLoading) fetchSessions(); };
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") onFocus(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [authLoading, fetchSessions]);
+
   const loadMessagesForSession = useCallback(async (sessionId: string, mountedCheck: () => boolean) => {
     setIsLoadingMessages(true);
     setMessagesLoadError(null);
@@ -246,14 +265,19 @@ export default function App() {
     if (!res.ok) throw new Error("Failed");
     const session = await res.json();
 
-    // Update list first
+    // Prepend immediately so the new session shows up with no lag, then
+    // reconcile against the real backend list right after — prepending
+    // alone onto potentially stale in-memory state is what let old,
+    // already-deleted sessions resurface (see the focus-refetch effect
+    // above for the full explanation).
     setSessions(prev => [session, ...prev]);
+    fetchSessions();
 
     // Set active ID but we DON'T clear messages here if we're about to populate them in handleSend
     setActiveId(session.id);
     setUploadSuccess(false);
     return session;
-  }, [API, getToken]);
+  }, [API, getToken, fetchSessions]);
 
   const confirmDeleteSession = useCallback(async (id: string) => {
     if (deletingSessionsRef.current.has(id)) {
