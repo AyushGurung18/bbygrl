@@ -378,13 +378,79 @@ export default function App() {
         throw new Error("Received an unexpected response from the server.");
       }
 
+      // /upload only queues the job (status: "queued") — the actual
+      // chunking/embedding happens asynchronously via Celery. This used to
+      // declare success and invite a question the instant the file was
+      // *queued*, not indexed — a real "summarize it" sent right after
+      // upload could easily race ahead of indexing actually finishing
+      // (worse for bigger documents), hit an empty vector store, and burn
+      // through the whole CRAG/Self-RAG retry loop for a document that
+      // simply wasn't there yet. Now polls the real job status and only
+      // declares success once indexing has actually completed.
+      if (!data.job_id) {
+        throw new Error("Upload succeeded but no job was returned to track indexing.");
+      }
+
+      const progressId = Date.now().toString();
       if (!isMountedRef.current) return true;
-      setUploadSuccess(true);
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: progressId,
         role: "ai",
-        content: `Document **${uploadedFile.name}** indexed successfully. What would you like to know about it?`,
+        content: `Indexing **${uploadedFile.name}**...`,
       }]);
+
+      const POLL_INTERVAL_MS = 1500;
+      const POLL_TIMEOUT_MS = 180_000;
+      const pollStart = Date.now();
+      let finalStatus: any = null;
+      while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
+        if (!isMountedRef.current) return true;
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        const statusRes = await fetch(`${API}/upload/status/${data.job_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!statusRes.ok) continue; // transient — keep polling until timeout
+        const statusData = await statusRes.json();
+        if (statusData.status === "done") {
+          finalStatus = statusData;
+          break;
+        }
+        if (statusData.status === "failed") {
+          finalStatus = statusData;
+          break;
+        }
+        const pct = typeof statusData.progress_percent === "number" ? ` (${statusData.progress_percent}%)` : "";
+        setMessages(prev => prev.map(m =>
+          m.id === progressId ? { ...m, content: `Indexing **${uploadedFile.name}**...${pct}` } : m
+        ));
+      }
+
+      if (!isMountedRef.current) return true;
+
+      if (!finalStatus) {
+        setMessages(prev => prev.map(m =>
+          m.id === progressId
+            ? { ...m, content: `Indexing **${uploadedFile.name}** is taking longer than expected. It may still finish in the background — try asking about it again shortly.` }
+            : m
+        ));
+        return false;
+      }
+
+      if (finalStatus.status === "failed") {
+        setMessages(prev => prev.map(m =>
+          m.id === progressId
+            ? { ...m, content: `Failed to index **${uploadedFile.name}**${finalStatus.error ? `: ${finalStatus.error}` : "."}` }
+            : m
+        ));
+        return false;
+      }
+
+      setUploadSuccess(true);
+      setMessages(prev => prev.map(m =>
+        m.id === progressId
+          ? { ...m, content: `Document **${uploadedFile.name}** indexed successfully. What would you like to know about it?` }
+          : m
+      ));
       return true;
     } catch (err: any) {
       if (isMountedRef.current) {
