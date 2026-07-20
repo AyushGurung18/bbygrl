@@ -932,9 +932,18 @@ export default function App() {
                   <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center" }}>
                     {msg.isStreaming && msg.content === "" ? (
                       msg.statusText ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.85 }}>
-                          <span className="status-pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: green, display: "inline-block", flexShrink: 0 }} />
-                          {msg.statusText}
+                        <span key={msg.statusText} className="status-line-anim" style={{ display: "inline-flex", flexDirection: "column", gap: 5 }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.9 }}>
+                            <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
+                              {[0, 0.15, 0.3].map((d, i) => (
+                                <span key={i} className="status-wave-dot" style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animationDelay: `${d}s` }} />
+                              ))}
+                            </span>
+                            {msg.statusText}
+                          </span>
+                          <span className="status-progress-track">
+                            <span className="status-progress-fill" />
+                          </span>
                         </span>
                       ) : (
                         <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
@@ -1099,6 +1108,13 @@ export default function App() {
         @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         @keyframes statusPulse { 0%, 100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
         .status-pulse-dot { animation: statusPulse 1.1s ease-in-out infinite; }
+        @keyframes statusWave { 0%, 60%, 100% { opacity: 0.35; transform: translateY(0) scale(0.85); } 30% { opacity: 1; transform: translateY(-3px) scale(1); } }
+        .status-wave-dot { animation: statusWave 1s ease-in-out infinite; }
+        @keyframes statusLineIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .status-line-anim { animation: statusLineIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        @keyframes statusProgressSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+        .status-progress-track { position: relative; width: 92px; height: 2px; border-radius: 1px; background: rgba(0,0,0,0.08); overflow: hidden; display: block; }
+        .status-progress-fill { position: absolute; top: 0; left: 0; width: 40%; height: 100%; border-radius: 1px; background: linear-gradient(90deg, transparent, currentColor, transparent); color: ${green}; animation: statusProgressSweep 1.3s ease-in-out infinite; }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
