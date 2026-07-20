@@ -484,10 +484,35 @@ export default function App() {
         // chunk has to be held back until the next read might complete it.
         let rawTail = "";
         const STATUS_MARKER = /\x1e([^\x1e]*)\x1e/g;
+        let receivedAnything = false;
+
+        // A proxy or the backend can close a stream cleanly (a normal
+        // done:true, no thrown error) without ever having sent a single
+        // byte — the fetch API doesn't always surface that as a network
+        // error. Left unguarded, the AI bubble stays on isStreaming+empty
+        // forever (the bouncing-dots fallback), with no error ever shown.
+        // This bounds the gap between reads: no data for this long means
+        // treat it as stuck rather than wait indefinitely.
+        const STALL_TIMEOUT_MS = 35_000;
+        const readWithStallTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> =>
+          Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("STALL_TIMEOUT")), STALL_TIMEOUT_MS)
+            ),
+          ]);
 
         while (true) {
-          const { done, value } = await reader.read();
+          let readResult: ReadableStreamReadResult<Uint8Array>;
+          try {
+            readResult = await readWithStallTimeout();
+          } catch {
+            reader.cancel().catch(() => {});
+            throw new Error("The server took too long to respond. Please try again.");
+          }
+          const { done, value } = readResult;
           if (done) break;
+          receivedAnything = true;
           rawTail += decoder.decode(value, { stream: true });
 
           let cleaned = "";
@@ -520,6 +545,15 @@ export default function App() {
 
         streamingActiveRef.current = false;
 
+        // The connection closed "cleanly" (done:true, no thrown error) but
+        // never delivered a single byte — same silent-hang risk as the
+        // stall timeout above, just via the other exit path (a fast clean
+        // close instead of a slow one). Surface it instead of quietly
+        // finishing with an empty bubble.
+        if (!receivedAnything) {
+          throw new Error("The connection closed before a response arrived. Please try again.");
+        }
+
         // Wait for typewriter loop to catch up and fully output the buffered text
         while (streamingBufferRef.current.length > 0) {
           await new Promise(resolve => setTimeout(resolve, 30));
@@ -535,6 +569,7 @@ export default function App() {
       }
 
     } catch (err) {
+      const errText = err instanceof Error && err.message ? err.message : "Connection Failed";
       setMessages(prev => {
         // aiId is only set once the chat request actually starts — a failure
         // before that (session creation, upload) has no message to attach
@@ -544,11 +579,13 @@ export default function App() {
           return [...prev, {
             id: Date.now().toString(),
             role: "ai",
-            content: "[Error: Connection Failed]",
+            content: `[Error: ${errText}]`,
           }];
         }
         return prev.map(m =>
-          m.id === aiId ? { ...m, content: m.content + "\n\n[Error: Connection Failed]", isStreaming: false } : m
+          m.id === aiId
+            ? { ...m, content: m.content + (m.content ? "\n\n" : "") + `[Error: ${errText}]`, isStreaming: false, statusText: undefined }
+            : m
         );
       });
     } finally {
