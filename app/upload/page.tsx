@@ -968,7 +968,7 @@ function UploadPageInner() {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: "0.75rem", color: "#fff", fontWeight: 900
             }}>
-              {user?.email?.[0].toUpperCase() || "?"}
+              {user?.email?.[0]?.toUpperCase() || "?"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
