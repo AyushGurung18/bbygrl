@@ -23,8 +23,10 @@ const ACCEPTED_EXTENSIONS = [".pdf", ".docx"];
 
 const bg = "#e6e1d8";
 const green = "#1a6b3a";
-const cardBg = "#dedad0";
-const borderCol = "rgba(0,0,0,0.10)";
+const cardBg = "#d4cfc4";        /* darker card for better contrast */
+const borderCol = "rgba(0,0,0,0.18)";
+const textPrimary = "#1a2a1a";
+const textMuted = "#4a6a4a";
 const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
 
 export default function LibraryPage() {
@@ -243,6 +245,29 @@ export default function LibraryPage() {
     }
   };
 
+  const downloadDocument = async (doc: DocumentRow) => {
+    setBusyAction(true);
+    try {
+      const res = await fetch(`${API}/documents/${doc.id}/file`, {
+        headers: await authHeaders(),
+      });
+      if (!res.ok) throw new Error("Could not fetch the raw file.");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      setUploadError(e?.message || "Failed to download document.");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
   const statusLabel = (d: DocumentRow) => {
     if (d.status === "processing") return "indexing…";
     if (d.status === "failed") return "failed";
@@ -260,10 +285,12 @@ export default function LibraryPage() {
     <div style={{ minHeight: "100vh", background: bg, ...mono, padding: "1.6rem 1.4rem" }}>
       <div style={{ maxWidth: 920, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1.6rem", flexWrap: "wrap" }}>
-          <Link href="/upload" style={{ color: green, fontSize: "0.72rem", textDecoration: "none", letterSpacing: "0.08em" }}>
+          <Link href="/upload" style={{ color: green, fontSize: "0.72rem", textDecoration: "none", letterSpacing: "0.08em", fontWeight: 700 }}>
             ← back to chat
           </Link>
-          <h1 style={{ fontSize: "1.1rem", fontWeight: 900, margin: 0, flex: 1 }}>Document Library</h1>
+          <h1 style={{ fontSize: "1.2rem", fontWeight: 900, margin: 0, flex: 1, color: textPrimary, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1.3rem" }}>📚</span> Document Library
+          </h1>
 
           <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFilePicked} style={{ display: "none" }} />
           <button
@@ -353,29 +380,52 @@ export default function LibraryPage() {
             {docs.map((d) => (
               <div
                 key={d.id}
+                className="doc-row"
                 style={{
-                  display: "flex", alignItems: "center", gap: "0.9rem", padding: "0.8rem 1rem",
-                  background: cardBg, border: `1px solid ${selected.has(d.id) ? green : borderCol}`, borderRadius: 5,
+                  display: "flex", alignItems: "center", gap: "0.9rem", padding: "1rem 1.2rem",
+                  background: cardBg, border: `1.5px solid ${selected.has(d.id) ? green : borderCol}`, borderRadius: 8,
+                  boxShadow: selected.has(d.id) ? `0 4px 12px rgba(26,107,58,0.15)` : `0 2px 5px rgba(0,0,0,0.05)`,
+                  transition: "all 0.2s ease"
                 }}
               >
-                <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelected(d.id)} style={{ cursor: "pointer" }} />
-                <div style={{ fontSize: "0.65rem", padding: "0.15rem 0.4rem", border: `1px solid ${borderCol}`, borderRadius: 3, color: green, textTransform: "uppercase" }}>
+                <input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelected(d.id)} style={{ cursor: "pointer", accentColor: green, width: 16, height: 16 }} />
+                <div style={{
+                  fontSize: "0.65rem", padding: "0.15rem 0.45rem",
+                  border: `1.5px solid ${green}`,
+                  borderRadius: 3, color: green,
+                  background: "rgba(26,107,58,0.08)",
+                  textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em",
+                }}>
                   {d.doc_type}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: textPrimary }}>
                     {d.filename}
                   </div>
-                  <div style={{ fontSize: "0.63rem", color: "#6a8a6a" }}>
+                  <div style={{ fontSize: "0.63rem", color: textMuted, marginTop: 2 }}>
                     {d.page_count ? `${d.page_count} page${d.page_count === 1 ? "" : "s"}` : d.char_count ? `${Math.round(d.char_count / 1000)}k chars` : ""}
                     {"  ·  "}
-                    <span style={{ color: statusColor(d) }}>{statusLabel(d)}</span>
+                    <span style={{ color: statusColor(d), fontWeight: 600 }}>{statusLabel(d)}</span>
                   </div>
                 </div>
-                <button onClick={() => openDocument(d)} disabled={busyAction || d.status !== "ready"} style={pillBtn}>
-                  open →
+                <button onClick={() => downloadDocument(d)} disabled={busyAction || d.status !== "ready"} style={{
+                  ...pillBtn,
+                  opacity: (busyAction || d.status !== "ready") ? 0.5 : 1,
+                  cursor: (busyAction || d.status !== "ready") ? "not-allowed" : "pointer",
+                }}>
+                  view raw ⬇
                 </button>
-                <button onClick={() => setDeleteTarget(d)} style={{ ...pillBtn, color: "#c85050", borderColor: "rgba(200,80,80,0.4)" }}>
+                <button onClick={() => openDocument(d)} disabled={busyAction || d.status !== "ready"} style={{
+                  ...pillBtn,
+                  background: green,
+                  color: "#fff",
+                  borderColor: green,
+                  opacity: (busyAction || d.status !== "ready") ? 0.5 : 1,
+                  cursor: (busyAction || d.status !== "ready") ? "not-allowed" : "pointer",
+                }}>
+                  chat →
+                </button>
+                <button onClick={() => setDeleteTarget(d)} style={{ ...pillBtn, color: "#b83030", borderColor: "rgba(200,60,60,0.55)", fontWeight: 700 }}>
                   delete
                 </button>
               </div>
@@ -406,12 +456,24 @@ export default function LibraryPage() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        .doc-row:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 16px rgba(0,0,0,0.08) !important;
+          border-color: rgba(26,107,58,0.4) !important;
+        }
       `}</style>
     </div>
   );
 }
 
 const pillBtn: React.CSSProperties = {
-  padding: "0.35rem 0.7rem", background: "transparent", border: `1px solid ${borderCol}`,
-  borderRadius: 3, color: green, cursor: "pointer", fontSize: "0.68rem", ...mono,
+  padding: "0.38rem 0.8rem",
+  background: "transparent",
+  border: `1.5px solid ${borderCol}`,
+  borderRadius: 3,
+  color: green,
+  cursor: "pointer",
+  fontSize: "0.68rem",
+  fontWeight: 600,
+  ...mono,
 };

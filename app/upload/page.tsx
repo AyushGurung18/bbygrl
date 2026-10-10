@@ -433,10 +433,12 @@ function UploadPageInner() {
         if (res.status === 413) {
           throw new Error("That file is too large for the server to accept.");
         }
-        if (res.status >= 500) {
-          throw new Error("The server hit an error processing that file. Please try again.");
-        }
-        throw new Error(`Upload failed (status ${res.status}).`);
+        let detail = `Upload failed (status ${res.status}).`;
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+        } catch {}
+        throw new Error(detail);
       }
 
       let data: any;
@@ -948,7 +950,7 @@ function UploadPageInner() {
   const visibleMessages = messages.filter(m => !m.isSystemNotice || !messages.some(x => x.role === "user"));
 
   return (
-    <div style={{ display: "flex", height: "100dvh", width: "100%", background: bg, overflow: "hidden", position: "relative", ...sansSerif }}>
+    <div style={{ display: "flex", position: "fixed", inset: 0, width: "100%", background: bg, overflow: "hidden", ...sansSerif }}>
 
       {/* MOBILE OVERLAY */}
       {sidebarOpen && (
@@ -962,7 +964,7 @@ function UploadPageInner() {
       {/* SIDEBAR */}
       <aside className={`app-sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{
         width: 292, flexShrink: 0, background: "#e8e4dc", borderRight: `1px solid ${borderCol}`,
-        display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden",
+        display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
       }}>
 
         <div style={{ padding: "1.3rem 1.5rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.65rem" }}>
@@ -1071,7 +1073,7 @@ function UploadPageInner() {
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       {/* MAIN */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", minWidth: 0, position: "relative" }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minWidth: 0, position: "relative" }}>
 
         <div className="bg-blob blob-1" />
         <div className="bg-blob blob-2" />
