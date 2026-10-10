@@ -1,7 +1,7 @@
 import AdminDashboard from "@/components/AdminDashboard";
 
 export const metadata = {
-  title: "Admin Telemetry - Thotqen",
+  title: "Admin Telemetry - Folio",
   description: "Live LLM Observability & Evaluation Dashboard",
 };
 

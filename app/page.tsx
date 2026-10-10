@@ -843,7 +843,7 @@ export default function Home() {
             <circle cx="10" cy="10" r="8.5" stroke={green} strokeWidth="1.5" />
             <path d="M6 10 Q10 4.5 14 10 Q10 15.5 6 10Z" fill={green} />
           </svg>
-          <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#1a2e1a", letterSpacing: "0.02em" }}>octo</span>
+          <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#1a2e1a", letterSpacing: "0.02em" }}>Folio</span>
           <span style={{
             fontSize: "0.55rem", letterSpacing: "0.2em", color: "#166534",
             border: "1px solid #166534", borderRadius: 2, padding: "0.1rem 0.4rem", marginLeft: "0.3rem",
@@ -1237,7 +1237,7 @@ export default function Home() {
         fontSize: "0.65rem", color: "#6a8a6a", letterSpacing: "0.1em",
         flexWrap: "wrap", gap: "0.5rem", position: "relative", zIndex: 1,
       }}>
-        <span>octo · AGENTIC RAG ENGINE</span>
+        <span>FOLIO · LEGAL DOCUMENT INTELLIGENCE</span>
         <span>© 2026 · FASTAPI + LANGGRAPH + CLOUDFLARE</span>
         <span>MIT LICENSE · SELF-HOSTED · BUILT WITH 🌿</span>
       </footer>

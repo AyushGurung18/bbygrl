@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "thotqen — AI Knowledge Copilot",
-  description: "Chat with your documents using RAG-powered AI. Upload PDFs and ask questions with full context.",
+  title: "Folio — Legal Contract Analysis",
+  description: "Upload a contract, ask questions about it, and get answers backed by quotes verified against the actual document text — every citation checked before it's shown to you.",
 };
 
 export default function RootLayout({

@@ -17,6 +17,13 @@ type Message = {
   isStreaming?: boolean;
   statusText?: string;
   quoteMeta?: QuoteMeta[];
+  // Upload progress / "indexed successfully" notices — never saved to the
+  // backend, client-only. Shown as a lighter-weight strip while they're
+  // still the newest thing on screen; once a real question has been sent,
+  // they'd otherwise sit above the actual conversation looking like an
+  // unanswered leftover prompt, so they're hidden from then on (see
+  // visibleMessages below) rather than rendered as a permanent chat turn.
+  isSystemNotice?: boolean;
 };
 
 type Session = {
@@ -458,6 +465,7 @@ function UploadPageInner() {
         id: progressId,
         role: "ai",
         content: `Indexing **${uploadedFile.name}**...`,
+        isSystemNotice: true,
       }]);
 
       const POLL_INTERVAL_MS = 1500;
@@ -790,12 +798,22 @@ function UploadPageInner() {
   // surface (lists, tables, code, blockquotes, links) properly; these
   // overrides just keep every element on-theme with the rest of the app
   // instead of using react-markdown's unstyled defaults.
-  const getMarkdownComponents = (isUser: boolean): React.ComponentProps<typeof ReactMarkdown>["components"] => {
+  // inline=true: used for the text segments *around* a verified-quote span
+  // (see renderAiContent below) — each segment is re-parsed through its own
+  // ReactMarkdown call, and a real <p> there forces a block-level break
+  // before/after every single quote, shattering one continuous sentence
+  // like "The cap is X (<quote>) and applies to Y" into three stacked
+  // blocks instead of one flowing line. A message with no quotes at all
+  // still gets real <p>/<ul>/<li> block structure (the only-text branch in
+  // renderAiContent doesn't go through per-segment rendering).
+  const getMarkdownComponents = (isUser: boolean, inline = false): React.ComponentProps<typeof ReactMarkdown>["components"] => {
     const linkColor = isUser ? "#fff" : green;
     const subtleBorder = isUser ? "rgba(255,255,255,0.28)" : borderCol;
     const inlineCodeBg = isUser ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.07)";
     return {
-      p: ({ children }) => <p style={{ margin: "0 0 0.65em 0" }}>{children}</p>,
+      p: inline
+        ? ({ children }) => <>{children}</>
+        : ({ children }) => <p style={{ margin: "0 0 0.65em 0" }}>{children}</p>,
       strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
       em: ({ children }) => <em>{children}</em>,
       ul: ({ children }) => <ul style={{ margin: "0.3em 0 0.65em", paddingLeft: "1.4em", display: "flex", flexDirection: "column", gap: "0.28em" }}>{children}</ul>,
@@ -886,7 +904,7 @@ function UploadPageInner() {
       <>
         {segments.map((seg, i) => {
           if (seg.type === "text") {
-            return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={getMarkdownComponents(false)}>{seg.content}</ReactMarkdown>;
+            return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={getMarkdownComponents(false, true)}>{seg.content}</ReactMarkdown>;
           }
           const verified = seg.meta.verified;
           return (
@@ -915,6 +933,11 @@ function UploadPageInner() {
     );
   };
 
+  // Once a real question has been sent, an upload/indexing notice sitting
+  // above it just looks like an unanswered leftover prompt — hide it from
+  // here on rather than let it linger as a permanent part of the thread.
+  const visibleMessages = messages.filter(m => !m.isSystemNotice || !messages.some(x => x.role === "user"));
+
   return (
     <div style={{ display: "flex", height: "100dvh", width: "100%", background: bg, overflow: "hidden", position: "relative", ...mono }}>
 
@@ -939,7 +962,7 @@ function UploadPageInner() {
             <path d="M6 10 Q10 4.5 14 10 Q10 15.5 6 10Z" fill={green} />
           </svg>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 900, fontSize: "0.92rem", color: "#1a2a1a", letterSpacing: "0.02em" }}>Thotqen</div>
+            <div style={{ fontWeight: 900, fontSize: "0.92rem", color: "#1a2a1a", letterSpacing: "0.02em" }}>Folio</div>
             <div style={{ fontSize: "0.58rem", letterSpacing: "0.18em", color: green, textTransform: "uppercase", opacity: 0.7, marginTop: 1 }}>agentic document intelligence</div>
           </div>
           <button
@@ -1018,7 +1041,7 @@ function UploadPageInner() {
             </div>
           </div>
           <div style={{ fontSize: "0.57rem", color: "#8a9a7a", letterSpacing: "0.08em" }}>
-            © 2026 Thotqen · agentic RAG engine
+            © 2026 Folio · legal document intelligence
           </div>
         </div>
       </aside>
@@ -1039,7 +1062,7 @@ function UploadPageInner() {
           >☰</button>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: "0.62rem", letterSpacing: "0.2em", color: green, opacity: 0.65, flexShrink: 0 }}>[ thotqen ]</div>
+            <div style={{ fontSize: "0.62rem", letterSpacing: "0.2em", color: green, opacity: 0.65, flexShrink: 0 }}>[ folio ]</div>
             {uploadSuccess && (
               <>
                 <div style={{ width: 1, height: 12, background: borderCol, margin: "0 0.4rem", flexShrink: 0 }} />
@@ -1088,60 +1111,29 @@ function UploadPageInner() {
                 retry
               </button>
             </div>
-          ) : messages.length === 0 ? (
+          ) : visibleMessages.length === 0 ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem" }}>
-              <div style={{ width: 72, height: 72, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
-                <svg width="72" height="72" viewBox="0 0 64 64" fill="none">
-                  {/* Mantle — a rounded dome rather than a plain ellipse, so it reads as an
-                      octopus head instead of a smiley-face oval. */}
+              <div style={{ width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
+                <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+                  {/* A folded page/document mark — the same visual language as the
+                      sidebar logo, scaled up, with no animation — a document-
+                      analysis tool's empty state should read as composed, not
+                      playful. */}
                   <path
-                    d="M15 32 C13 18 21 8 32 8 C43 8 51 18 49 32 C48 40 41 44 32 44 C23 44 16 40 15 32 Z"
+                    d="M18 8 H38 L48 18 V56 H18 Z"
                     fill={cardBg}
                     stroke={green}
                     strokeWidth="1.5"
+                    strokeLinejoin="round"
                   />
-                  <circle cx="26" cy="25" r="1.8" fill={green} />
-                  <circle cx="38" cy="25" r="1.8" fill={green} />
-                  {[0, 1, 2, 3, 4, 5].map((i) => {
-                    const baseX = 15 + i * 6.8;
-                    const baseY = 41 + Math.abs(i - 2.5) * 0.8;
-                    const lenScale = 1 - Math.abs(i - 2.5) * 0.05;
-                    // Outward sway that continues in one direction (no reversal),
-                    // so the arm trails down and out instead of hooking back in.
-                    const sway = (i - 2.5) * 1.6;
-                    const midX = baseX + sway * 0.6;
-                    const midY = baseY + 10 * lenScale;
-                    const tipX = baseX + sway;
-                    const tipY = baseY + 20 * lenScale;
-                    return (
-                      <g
-                        key={i}
-                        className={`tentacle tentacle-${i}`}
-                        style={{ transformOrigin: `${baseX}px ${baseY}px` } as React.CSSProperties}
-                      >
-                        <path
-                          d={`M${baseX} ${baseY} Q${midX} ${midY} ${tipX} ${tipY}`}
-                          stroke={green}
-                          strokeWidth="2.4"
-                          strokeLinecap="round"
-                          fill="none"
-                        />
-                        <path
-                          d={`M${baseX} ${baseY} Q${midX} ${midY} ${tipX} ${tipY}`}
-                          stroke={cardBg}
-                          strokeWidth="0.9"
-                          strokeLinecap="round"
-                          fill="none"
-                          opacity={0.5}
-                        />
-                        <circle cx={(baseX + midX) / 2} cy={(baseY + midY) / 2} r={0.8} fill={green} opacity={0.4} />
-                      </g>
-                    );
-                  })}
+                  <path d="M38 8 V18 H48" stroke={green} strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+                  <line x1="24" y1="28" x2="42" y2="28" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
+                  <line x1="24" y1="36" x2="42" y2="36" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
+                  <line x1="24" y1="44" x2="36" y2="44" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
                 </svg>
               </div>
               <h2 style={{ fontSize: "clamp(1.2rem,3vw,1.9rem)", fontWeight: 900, color: "#1a2a1a", margin: "0 0 0.5rem", textAlign: "center", ...mono }}>
-                ask your documents anything
+                ask your contracts anything
               </h2>
               <p style={{ fontSize: "0.7rem", color: "#6a8a6a", letterSpacing: "0.07em", textAlign: "center", maxWidth: 300, lineHeight: 2, textTransform: "uppercase", margin: 0, minHeight: "2.6em" }}>
                 {typedHint}
@@ -1150,11 +1142,11 @@ function UploadPageInner() {
                 )}
               </p>
               <div style={{ fontSize: "0.56rem", color: "#8a9a7a", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: "0.9rem", opacity: 0.7 }}>
-                octo · one tentacle per agentic step
+                folio · every quote verified against the source
               </div>
             </div>
           ) : (
-            messages.map((msg) => (
+            visibleMessages.map((msg) => (
               <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
                   maxWidth: "85%", padding: "0.9rem 1.1rem", borderRadius: 4,
@@ -1163,7 +1155,7 @@ function UploadPageInner() {
                   color: msg.role === "user" ? "#fff" : "#1a2a1a",
                 }}>
                   <div style={{ fontSize: "0.56rem", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: "0.45rem", opacity: 0.5, color: msg.role === "user" ? "#c8dfc8" : green }}>
-                    {msg.role === "ai" ? "[ thotqen ]" : "you"}
+                    {msg.role === "ai" ? "[ folio ]" : "[ you ]"}
                   </div>
                   <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center" }}>
                     {msg.isStreaming && msg.content === "" ? (
@@ -1182,10 +1174,17 @@ function UploadPageInner() {
                           </span>
                         </span>
                       ) : (
-                        <span style={{ display: "inline-flex", gap: 5, alignItems: "center", minHeight: "1.4em" }}>
-                          {[0, 0.2, 0.4].map((d, i) => (
-                            <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
-                          ))}
+                        // Before the first status event arrives (brief —
+                        // just the network round-trip) — still labeled,
+                        // same visual language as the status line below,
+                        // rather than an unexplained bare spinner.
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.9, minHeight: "1.4em" }}>
+                          <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
+                            {[0, 0.2, 0.4].map((d, i) => (
+                              <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
+                            ))}
+                          </span>
+                          Reading the document...
                         </span>
                       )
                     ) : (
@@ -1401,14 +1400,6 @@ function UploadPageInner() {
         @keyframes drift1 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(40px, 30px); } }
         @keyframes drift2 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-30px, -25px); } }
 
-        @keyframes tentacleWiggle { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
-        .tentacle { animation: tentacleWiggle 2.2s ease-in-out infinite; }
-        .tentacle-0 { animation-delay: 0s; }
-        .tentacle-1 { animation-delay: 0.12s; }
-        .tentacle-2 { animation-delay: 0.24s; }
-        .tentacle-3 { animation-delay: 0.36s; }
-        .tentacle-4 { animation-delay: 0.48s; }
-        .tentacle-5 { animation-delay: 0.6s; }
 
         @keyframes msgEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .msg-row { animation: msgEnter 0.22s ease-out; }
