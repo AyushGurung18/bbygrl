@@ -1386,6 +1386,7 @@ function UploadPageInner() {
                       </>
                     )}
                   </div>
+                  </div>
                   {/* Message action buttons — copy, share, read aloud */}
                   {!msg.isStreaming && msg.content && (
                     <MessageActions id={msg.id} text={msg.content} isUser={msg.role === 'user'} />
