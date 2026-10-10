@@ -1449,25 +1449,31 @@ function UploadPageInner() {
               position: "relative"
             }}>
               
-              {/* Expand/Collapse Button */}
-              {inputVal && (
+              {/* Expand/Collapse Button (Floats above the pill to avoid send button) */}
+              {(inputExpanded || inputVal.length > 100 || inputVal.split('\n').length > 2) && (
                 <button
                   onClick={() => setInputExpanded(!inputExpanded)}
                   title={inputExpanded ? "Collapse input" : "Expand input"}
                   style={{
-                    position: "absolute", top: "0.4rem", right: "0.5rem",
-                    background: "rgba(0,0,0,0.04)", border: "none", borderRadius: 4,
-                    padding: "0.2rem", cursor: "pointer", color: "#888",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "all 0.15s ease", zIndex: 10
+                    position: "absolute", top: "-2.2rem", right: "1rem",
+                    background: "#fff", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12,
+                    padding: "0.3rem 0.6rem", cursor: "pointer", color: "#555",
+                    display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.68rem", fontWeight: 500,
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)", transition: "all 0.15s ease", zIndex: 10, ...sansSerif
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; e.currentTarget.style.color = "#333"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; e.currentTarget.style.color = "#888"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#faf9f7"; e.currentTarget.style.color = "#111"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#555"; }}
                 >
                   {inputExpanded ? (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l8-8M4 4v8h8"/></svg>
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l8-8M4 4v8h8"/></svg>
+                      Collapse
+                    </>
                   ) : (
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4L4 12M12 12V4H4"/></svg>
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4L4 12M12 12V4H4"/></svg>
+                      Expand
+                    </>
                   )}
                 </button>
               )}
@@ -1495,23 +1501,27 @@ function UploadPageInner() {
                 value={inputVal}
                 onChange={(e) => {
                   setInputVal(e.target.value);
-                  // Auto-expand if lines get too long
-                  if (!inputExpanded && e.target.value.split('\n').length > 4) {
-                    setInputExpanded(true);
-                  }
+                  // Auto-expand height dynamically up to 120px
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
                 }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={(e) => { 
+                  if (e.key === "Enter" && !e.shiftKey) { 
+                    e.preventDefault(); 
+                    if (e.currentTarget) e.currentTarget.style.height = "auto";
+                    handleSend(); 
+                  } 
+                }}
                 placeholder="Ask anything about your document…"
                 rows={1}
                 style={{
                   flex: 1, background: "transparent", border: "none",
-                  padding: inputExpanded ? "0.8rem 0.5rem 0.5rem" : "0.55rem 0.5rem", 
-                  resize: "none", outline: "none", color: "#1c2b1c",
+                  padding: "0.55rem 0.5rem", resize: "none", outline: "none", color: "#1c2b1c",
                   fontSize: "0.85rem", lineHeight: 1.5, 
                   minHeight: 36, 
+                  height: inputExpanded ? "55vh" : undefined,
                   maxHeight: inputExpanded ? "55vh" : 120,
-                  height: inputExpanded ? "250px" : undefined,
-                  transition: "max-height 0.2s ease, padding 0.2s ease",
+                  transition: "max-height 0.2s ease",
                   ...sansSerif,
                 }}
               />
