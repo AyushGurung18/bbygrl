@@ -86,6 +86,7 @@ function UploadPageInner() {
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const deletingSessionsRef = useRef<Set<string>>(new Set());
 
@@ -407,7 +408,9 @@ function UploadPageInner() {
 
   // --- Autoscroll ---
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
+    }
   }, [messages, isAnswering]);
 
   // --- Upload Handlers ---
@@ -866,9 +869,6 @@ function UploadPageInner() {
       try {
         await navigator.share({ text: clean, title: 'Folio — Document Analysis' });
       } catch { /* user dismissed */ }
-    } else {
-      // Desktop fallback: copy + brief toast
-      navigator.clipboard.writeText(clean).catch(() => {});
     }
   }, []);
 
@@ -941,16 +941,18 @@ function UploadPageInner() {
           )}
         </button>
 
-        {/* Share */}
-        <button title="Share" onClick={() => shareMessage(text)} style={btnBase}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-            <circle cx="12" cy="3" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
-            <circle cx="12" cy="13" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
-            <circle cx="4" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
-            <line x1="5.7" y1="7.1" x2="10.3" y2="4.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            <line x1="5.7" y1="8.9" x2="10.3" y2="11.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-        </button>
+        {/* Share (Only if supported by browser natively) */}
+        {'share' in navigator && (
+          <button title="Share" onClick={() => shareMessage(text)} style={btnBase}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="12" cy="3" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+              <circle cx="12" cy="13" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+              <circle cx="4" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+              <line x1="5.7" y1="7.1" x2="10.3" y2="4.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              <line x1="5.7" y1="8.9" x2="10.3" y2="11.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
 
         {/* Read Aloud */}
         {'speechSynthesis' in (typeof window !== 'undefined' ? window : {}) && (
@@ -1287,7 +1289,7 @@ function UploadPageInner() {
           </Link>
         </div>
 
-        <div style={{
+        <div ref={chatContainerRef} style={{
           flex: 1, overflowY: "auto", padding: "1.6rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem",
           position: "relative", zIndex: 1,
           opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
