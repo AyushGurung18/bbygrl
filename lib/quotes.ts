@@ -20,6 +20,7 @@ export type QuoteMeta = {
   document_id: string;
   filename: string;
   page: number | null;
+  page_end: number | null;  // set only when the quote spans onto a later page
   occurrences: number;
   char_start: number | null;
   char_end: number | null;
@@ -31,7 +32,7 @@ export type MessageSegment =
   | { type: "quote"; content: string; meta: QuoteMeta; index: number };
 
 const EMPTY_META: QuoteMeta = {
-  verified: false, document_id: "", filename: "", page: null,
+  verified: false, document_id: "", filename: "", page: null, page_end: null,
   occurrences: 0, char_start: null, char_end: null, case_mismatch: false,
 };
 

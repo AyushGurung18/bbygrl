@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import mammoth from "mammoth";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -18,8 +18,9 @@ export type ViewerTarget = {
   documentId: string;
   docType: "pdf" | "docx";
   filename: string;
-  quote?: string;        // text to locate & highlight, if any
-  page?: number | null;  // PDF only — jump here before searching
+  quote?: string;         // text to locate & highlight, if any
+  page?: number | null;   // PDF only — jump here before searching
+  pageEnd?: number | null; // PDF only — set when the quote spans onto a later page; renders page..pageEnd together so the search can cross the page break
 };
 
 const HIGHLIGHT_CLASS = "cite-highlight";
@@ -40,14 +41,36 @@ export default function DocumentViewer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [pageNum, setPageNum] = useState(target.page || 1);
+  // Set from target.pageEnd when a quote spans onto a later page; renders
+  // pageNum..spanPageEnd stacked together so the text-layer search can
+  // cross the page break, same whitespace-tolerant join as a line break
+  // within one page. Cleared on manual prev/next navigation — once the
+  // user is just browsing, go back to one page at a time.
+  const [spanPageEnd, setSpanPageEnd] = useState<number | null>(target.pageEnd ?? null);
   const [notFound, setNotFound] = useState(false);
   const docxContainerRef = useRef<HTMLDivElement>(null);
   const pageWrapRef = useRef<HTMLDivElement>(null);
+  const renderedTextLayersRef = useRef<Set<number>>(new Set());
+
+  const pagesToRender = useMemo(() => {
+    if (spanPageEnd && spanPageEnd > pageNum) {
+      return Array.from({ length: spanPageEnd - pageNum + 1 }, (_, i) => pageNum + i);
+    }
+    return [pageNum];
+  }, [pageNum, spanPageEnd]);
 
   useEffect(() => {
     setPageNum(target.page || 1);
+    setSpanPageEnd(target.pageEnd ?? null);
+    renderedTextLayersRef.current = new Set();
     setNotFound(false);
-  }, [target.documentId, target.page]);
+  }, [target.documentId, target.page, target.pageEnd]);
+
+  const goToPage = useCallback((updater: (p: number) => number) => {
+    setSpanPageEnd(null); // manual navigation: back to single-page browsing
+    renderedTextLayersRef.current = new Set();
+    setPageNum(updater);
+  }, []);
 
   // Fetch the original file once per document
   useEffect(() => {
@@ -97,22 +120,29 @@ export default function DocumentViewer({
     return () => clearTimeout(timer);
   }, [htmlContent, target.quote, target.docType]);
 
-  // PDF: highlight once the current page's text layer has rendered
-  const handleTextLayerSuccess = useCallback(() => {
+  // PDF: search once every page in pagesToRender has its text layer ready —
+  // a single page when the quote doesn't cross a page break, or several
+  // stacked together when it does (see spanPageEnd above). Searching the
+  // whole wrapper (not one page's .react-pdf__Page__textContent) lets the
+  // tree walker in findAndHighlight() flow across all of them as one
+  // continuous text stream, inserting the same whitespace-tolerant gap
+  // between pages that it already inserts between lines within one page.
+  const handleTextLayerSuccess = useCallback((pageNumber: number) => {
+    renderedTextLayersRef.current.add(pageNumber);
+    if (!pagesToRender.every(p => renderedTextLayersRef.current.has(p))) return;
+
     const container = pageWrapRef.current;
     if (!container) return;
-    const textLayer = container.querySelector(".react-pdf__Page__textContent") as HTMLElement | null;
-    if (!textLayer) return;
-    clearHighlights(textLayer, HIGHLIGHT_CLASS);
+    clearHighlights(container, HIGHLIGHT_CLASS);
     if (!target.quote) return;
-    const mark = findAndHighlight(textLayer, target.quote, HIGHLIGHT_CLASS);
+    const mark = findAndHighlight(container, target.quote, HIGHLIGHT_CLASS);
     if (mark) {
       mark.scrollIntoView({ behavior: "smooth", block: "center" });
       setNotFound(false);
     } else {
       setNotFound(true);
     }
-  }, [target.quote]);
+  }, [target.quote, pagesToRender]);
 
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
 
@@ -141,9 +171,9 @@ export default function DocumentViewer({
           </div>
           {target.docType === "pdf" && numPages > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.72rem" }}>
-              <button onClick={() => setPageNum((p) => Math.max(1, p - 1))} style={navBtnStyle}>‹</button>
-              <span>{pageNum} / {numPages}</span>
-              <button onClick={() => setPageNum((p) => Math.min(numPages, p + 1))} style={navBtnStyle}>›</button>
+              <button onClick={() => goToPage((p) => Math.max(1, p - 1))} style={navBtnStyle}>‹</button>
+              <span>{pagesToRender.length > 1 ? `${pageNum}-${pagesToRender[pagesToRender.length - 1]}` : pageNum} / {numPages}</span>
+              <button onClick={() => goToPage((p) => Math.min(numPages, p + 1))} style={navBtnStyle}>›</button>
             </div>
           )}
           <button onClick={onClose} style={{ ...navBtnStyle, fontSize: "0.9rem" }}>✕</button>
@@ -154,7 +184,7 @@ export default function DocumentViewer({
             padding: "0.5rem 1rem", background: "rgba(200,150,50,0.12)", fontSize: "0.68rem",
             color: "#8a6a2a", borderBottom: "1px solid rgba(0,0,0,0.08)", ...mono,
           }}>
-            Couldn't locate this exact passage in the rendered view{target.docType === "pdf" ? " on this page" : ""} — it may be split across a layout element the renderer doesn't expose as plain text.
+            Couldn't locate this exact passage in the rendered view{target.docType === "pdf" ? (pagesToRender.length > 1 ? ` across pages ${pageNum}-${pagesToRender[pagesToRender.length - 1]}` : " on this page") : ""} — it may be split across a layout element the renderer doesn't expose as plain text.
           </div>
         )}
 
@@ -175,13 +205,16 @@ export default function DocumentViewer({
               onLoadError={(e) => setLoadError(e.message || "Could not render this PDF.")}
               loading={<div style={{ ...mono, fontSize: "0.75rem" }}>Loading PDF…</div>}
             >
-              <div ref={pageWrapRef} style={{ display: "flex", justifyContent: "center" }}>
-                <Page
-                  pageNumber={pageNum}
-                  renderAnnotationLayer={false}
-                  onRenderTextLayerSuccess={handleTextLayerSuccess}
-                  width={660}
-                />
+              <div ref={pageWrapRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+                {pagesToRender.map((p) => (
+                  <Page
+                    key={p}
+                    pageNumber={p}
+                    renderAnnotationLayer={false}
+                    onRenderTextLayerSuccess={() => handleTextLayerSuccess(p)}
+                    width={660}
+                  />
+                ))}
               </div>
             </Document>
           ) : (

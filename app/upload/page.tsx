@@ -864,6 +864,7 @@ function UploadPageInner() {
       filename: doc.filename,
       quote: quoteText,
       page: meta.page,
+      pageEnd: meta.page_end,
     });
   }, [sessionDocs]);
 
