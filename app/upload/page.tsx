@@ -833,6 +833,140 @@ function UploadPageInner() {
   // inline=true: used for the text segments *around* a verified-quote span
   // (see renderAiContent below) — each segment is re-parsed through its own
   // ReactMarkdown call, and a real <p> there forces a block-level break
+  // ─── Per-message action state ─────────────────────────────────────────────
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+
+  const copyMessage = useCallback((id: string, text: string) => {
+    // Strip quote markers for clean copy
+    const clean = text.replace(/\u{201C}|\u{201D}|\u{00AB}|\u{00BB}/gu, '"').trim();
+    navigator.clipboard.writeText(clean).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1800);
+    }).catch(() => {
+      // Fallback for insecure contexts
+      const ta = document.createElement('textarea');
+      ta.value = clean;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1800);
+    });
+  }, []);
+
+  const shareMessage = useCallback(async (text: string) => {
+    const clean = text.replace(/\u{201C}|\u{201D}/gu, '"').trim();
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: clean, title: 'Folio — Document Analysis' });
+      } catch { /* user dismissed */ }
+    } else {
+      // Desktop fallback: copy + brief toast
+      navigator.clipboard.writeText(clean).catch(() => {});
+    }
+  }, []);
+
+  const toggleSpeak = useCallback((id: string, text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    if (speakingId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    // Strip markdown syntax for clean reading
+    const clean = text
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/`{1,3}[^`]*`{1,3}/g, '')
+      .replace(/#+\s/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[\u{201C}\u{201D}\u{AB}\u{BB}]/gu, '"')
+      .trim();
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 0.95;
+    utt.onend = () => setSpeakingId(null);
+    utt.onerror = () => setSpeakingId(null);
+    setSpeakingId(id);
+    window.speechSynthesis.speak(utt);
+  }, [speakingId]);
+
+  // Stop speech when switching sessions
+  useEffect(() => {
+    window.speechSynthesis?.cancel();
+    setSpeakingId(null);
+  }, [activeId]);
+
+  const MessageActions = ({ id, text, isUser }: { id: string; text: string; isUser: boolean }) => {
+    const isCopied = copiedId === id;
+    const isSpeaking = speakingId === id;
+    const btnBase: React.CSSProperties = {
+      background: 'transparent', border: 'none', cursor: 'pointer',
+      padding: '0.25rem 0.35rem', borderRadius: 5, display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      color: isUser ? 'rgba(255,255,255,0.65)' : '#888',
+      transition: 'all 0.15s ease',
+    };
+    return (
+      <div className="msg-actions" style={{
+        display: 'flex', gap: 2, marginTop: '0.35rem',
+        justifyContent: isUser ? 'flex-end' : 'flex-start',
+        opacity: 0, transition: 'opacity 0.15s ease',
+      }}>
+        {/* Copy */}
+        <button
+          title={isCopied ? 'Copied!' : 'Copy'}
+          onClick={() => copyMessage(id, text)}
+          style={{ ...btnBase, color: isCopied ? (isUser ? '#a8ffca' : green) : btnBase.color }}
+        >
+          {isCopied ? (
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="2" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M2 5h2v8.5a.5.5 0 0 0 .5.5H11v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          )}
+        </button>
+
+        {/* Share */}
+        <button title="Share" onClick={() => shareMessage(text)} style={btnBase}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <circle cx="12" cy="3" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+            <circle cx="12" cy="13" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+            <circle cx="4" cy="8" r="1.8" stroke="currentColor" strokeWidth="1.4"/>
+            <line x1="5.7" y1="7.1" x2="10.3" y2="4.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+            <line x1="5.7" y1="8.9" x2="10.3" y2="11.9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        {/* Read Aloud */}
+        {'speechSynthesis' in (typeof window !== 'undefined' ? window : {}) && (
+          <button
+            title={isSpeaking ? 'Stop reading' : 'Read aloud'}
+            onClick={() => toggleSpeak(id, text)}
+            style={{ ...btnBase, color: isSpeaking ? (isUser ? '#a8ffca' : green) : btnBase.color }}
+          >
+            {isSpeaking ? (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <rect x="3" y="3" width="3.5" height="10" rx="1" fill="currentColor"/>
+                <rect x="9.5" y="3" width="3.5" height="10" rx="1" fill="currentColor"/>
+              </svg>
+            ) : (
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M3 5.5h2l3-3v11l-3-3H3a.5.5 0 0 1-.5-.5v-4A.5.5 0 0 1 3 5.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M10.5 5.5a3 3 0 0 1 0 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                <path d="M12.5 3.5a5.5 5.5 0 0 1 0 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            )}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   // before/after every single quote, shattering one continuous sentence
   // like "The cap is X (<quote>) and applies to Y" into three stacked
   // blocks instead of one flowing line. A message with no quotes at all
@@ -1197,15 +1331,17 @@ function UploadPageInner() {
                     </svg>
                   </div>
                 )}
-                <div style={{
-                  maxWidth: msg.role === "user" ? "78%" : "84%",
-                  padding: msg.role === "user" ? "0.75rem 1rem" : "1rem 1.2rem",
-                  borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "2px 12px 12px 12px",
-                  border: msg.role === "user" ? "none" : `1px solid ${borderCol}`,
-                  background: msg.role === "user" ? green : "#fff",
-                  color: msg.role === "user" ? "#fff" : "#1c2b1c",
-                  boxShadow: msg.role === "user" ? "0 1px 8px rgba(26,107,58,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
-                }}>
+                {/* Bubble + action buttons stacked vertically */}
+                <div style={{ display: "flex", flexDirection: "column", maxWidth: msg.role === "user" ? "78%" : "84%", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{
+                    width: "100%",
+                    padding: msg.role === "user" ? "0.75rem 1rem" : "1rem 1.2rem",
+                    borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "2px 12px 12px 12px",
+                    border: msg.role === "user" ? "none" : `1px solid ${borderCol}`,
+                    background: msg.role === "user" ? green : "#fff",
+                    color: msg.role === "user" ? "#fff" : "#1c2b1c",
+                    boxShadow: msg.role === "user" ? "0 1px 8px rgba(26,107,58,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
+                  }}>
                   {msg.role === "ai" && (
                     <div style={{ fontSize: "0.62rem", fontWeight: 700, color: green, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.5rem", ...sansSerif }}>Folio</div>
                   )}
@@ -1250,6 +1386,10 @@ function UploadPageInner() {
                       </>
                     )}
                   </div>
+                  {/* Message action buttons — copy, share, read aloud */}
+                  {!msg.isStreaming && msg.content && (
+                    <MessageActions id={msg.id} text={msg.content} isUser={msg.role === 'user'} />
+                  )}
                 </div>
                 {msg.role === "user" && (
                   <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1c2b1c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2, fontSize: "0.72rem", color: "#fff", fontWeight: 700, ...sansSerif }}>
@@ -1522,6 +1662,19 @@ function UploadPageInner() {
           width: 10px; height: 10px; border-radius: 50%;
           border: 1.5px solid rgba(26,107,58,0.2); border-top-color: ${green};
           animation: spin 0.75s linear infinite; display: inline-block; flex-shrink: 0;
+        }
+        
+        /* Show message action buttons on row hover */
+        .msg-row:hover .msg-actions {
+          opacity: 1 !important;
+        }
+        .msg-row:focus-within .msg-actions {
+          opacity: 1 !important;
+        }
+        /* Hover colour for action buttons */
+        .msg-actions button:hover {
+          background: rgba(0,0,0,0.06) !important;
+          color: #333 !important;
         }
 
         @media (max-width: 900px) {
