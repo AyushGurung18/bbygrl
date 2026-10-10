@@ -252,34 +252,49 @@ function UploadPageInner() {
   const loadMessagesForSession = useCallback(async (sessionId: string, mountedCheck: () => boolean) => {
     setIsLoadingMessages(true);
     setMessagesLoadError(null);
-    try {
-      const res = await fetch(`${API}/sessions/${sessionId}/messages`, {
-        headers: await authHeaders(),
-      });
-      if (!res.ok) throw new Error("Failed");
 
-      const data = await res.json();
+    // Auto-retry up to 3x with 2s delay to handle cold-start backend timeouts
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000;
+    let lastErr: any;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       if (!mountedCheck()) return;
-
-      const msgs: Message[] = (data.messages ?? []).map((m: any) => ({
-        id: String(m.id),
-        role: m.role === "assistant" ? "ai" : "user",
-        content: m.content,
-        // Persisted per-quote verification results — without this, every
-        // quote in a reopened conversation would default to "unverified"
-        // regardless of what it actually verified as when first generated.
-        quoteMeta: m.quotes ?? undefined,
-      }));
-
-      setMessages(msgs);
-      setUploadSuccess(msgs.length > 0);
-    } catch (err) {
-      if (mountedCheck()) {
-        console.error("Error loading messages:", err);
-        setMessagesLoadError("Couldn't load this conversation. Check your connection and try again.");
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY));
+        if (!mountedCheck()) return;
       }
-    } finally {
-      if (mountedCheck()) setIsLoadingMessages(false);
+      try {
+        const res = await fetch(`${API}/sessions/${sessionId}/messages`, {
+          headers: await authHeaders(),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        if (!mountedCheck()) return;
+
+        const msgs: Message[] = (data.messages ?? []).map((m: any) => ({
+          id: String(m.id),
+          role: m.role === "assistant" ? "ai" : "user",
+          content: m.content,
+          quoteMeta: m.quotes ?? undefined,
+        }));
+
+        setMessages(msgs);
+        setUploadSuccess(msgs.length > 0);
+        if (mountedCheck()) setIsLoadingMessages(false);
+        return; // success — stop retrying
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[loadMessages] attempt ${attempt + 1} failed:`, err);
+      }
+    }
+
+    // All retries exhausted
+    if (mountedCheck()) {
+      console.error("Error loading messages after retries:", lastErr);
+      setMessagesLoadError("Couldn't load this conversation — the server may be waking up. Try again in a moment.");
+      setIsLoadingMessages(false);
     }
   }, [API, authHeaders]);
 
@@ -1234,23 +1249,25 @@ function UploadPageInner() {
           <div ref={chatBottomRef} />
         </div>
 
-        {/* INPUT AREA - DOCKED BOTTOM */}
+        {/* INPUT AREA - DOCKED BOTTOM, zero bottom gap */}
         <div style={{ 
-          borderTop: `1px solid rgba(0,0,0,0.06)`, padding: "0.6rem 1.5rem 0.6rem", background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1,
+          borderTop: `1px solid rgba(0,0,0,0.06)`,
+          padding: "0.6rem 1.5rem 0",
+          background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1,
           display: "flex", flexDirection: "column", alignItems: "center"
         }}>
           <div style={{ width: "100%", maxWidth: "760px", display: "flex", flexDirection: "column" }}>
             
             {/* Upload Error Banner */}
             {uploadError && (
-              <div style={{ padding: "0.55rem 0.9rem", background: "rgba(200,50,50,0.07)", border: "1px solid rgba(200,50,50,0.2)", borderRadius: 8, marginBottom: "0.6rem", fontSize: "0.75rem", color: "#b84040", ...sansSerif, alignSelf: "center" }}>
+              <div style={{ padding: "0.55rem 0.9rem", background: "rgba(200,50,50,0.07)", border: "1px solid rgba(200,50,50,0.2)", borderRadius: 8, marginBottom: "0.5rem", fontSize: "0.75rem", color: "#b84040", ...sansSerif }}>
                 {uploadError}
               </div>
             )}
 
             {/* File Pill */}
             {pendingFile && (
-              <div style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "#fff", border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 20, marginBottom: "0.6rem", fontSize: "0.73rem", color: greenDark, fontWeight: 500, ...sansSerif }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.35rem 0.7rem", background: "#fff", border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 20, marginBottom: "0.4rem", fontSize: "0.73rem", color: greenDark, fontWeight: 500, ...sansSerif, alignSelf: "flex-start" }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8 L7 13 L14 3" stroke={green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 {pendingFile.name}
                 <button onClick={() => setPendingFile(null)} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: "0.8rem", padding: 0, lineHeight: 1, marginLeft: 4 }}>✕</button>
@@ -1264,8 +1281,6 @@ function UploadPageInner() {
               border: "1px solid rgba(0,0,0,0.08)",
               boxShadow: "0 1px 4px rgba(0,0,0,0.03)"
             }}>
-              
-              {/* Attach Button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach PDF or DOCX"
@@ -1299,7 +1314,6 @@ function UploadPageInner() {
                 }}
               />
               
-              {/* Send/Stop Button */}
               {isAnswering ? (
                 <button
                   onClick={handleStop}
@@ -1341,31 +1355,27 @@ function UploadPageInner() {
                 </button>
               )}
             </div>
-            
-            {/* Footer Area */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", padding: "0 0.4rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", userSelect: "none" }}>
+
+            {/* Footer row — tightly packed, no bottom margin */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.3rem 0.4rem 0.4rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", userSelect: "none" }}>
+                <div style={{ 
+                  width: 26, height: 14, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
+                  position: "relative", transition: "background 0.25s ease", flexShrink: 0
+                }}>
                   <div style={{ 
-                    width: 26, height: 14, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
-                    position: "relative", transition: "background 0.25s ease" 
-                  }}>
-                    <div style={{ 
-                      width: 10, height: 10, borderRadius: "50%", background: "#fff", 
-                      position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
-                      transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
-                    }} />
-                  </div>
-                  <span style={{ fontSize: "0.68rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
-                    Agentic mode
-                  </span>
-                  <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
-                </label>
-              </div>
-              <div style={{ fontSize: "0.62rem", color: "#999", ...sansSerif }}>
-                AI may make errors · verify sources
-              </div>
+                    width: 10, height: 10, borderRadius: "50%", background: "#fff", 
+                    position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
+                    transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
+                  }} />
+                </div>
+                <span style={{ fontSize: "0.68rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
+                  Agentic mode
+                </span>
+                <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
+              </label>
+              <div style={{ fontSize: "0.62rem", color: "#bbb", ...sansSerif }}>AI may make errors · verify sources</div>
             </div>
           </div>
         </div>
