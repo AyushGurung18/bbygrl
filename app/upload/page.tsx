@@ -517,7 +517,7 @@ function UploadPageInner() {
       setUploadSuccess(true);
       setMessages(prev => prev.map(m =>
         m.id === progressId
-          ? { ...m, content: `Document **${uploadedFile.name}** indexed successfully. What would you like to know about it?` }
+          ? { ...m, content: `**${uploadedFile.name}** has been indexed and is ready for analysis.`, isSystemNotice: true }
           : m
       ));
       return true;
@@ -787,10 +787,12 @@ function UploadPageInner() {
   }, [activeId, API, authHeaders]);
 
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
-  const bg = "#e6e1d8";
+  const sansSerif = { fontFamily: "'Inter', system-ui, -apple-system, sans-serif" } as React.CSSProperties;
+  const bg = "#edeae3";
   const green = "#1a6b3a";
-  const cardBg = "#dedad0";
-  const borderCol = "rgba(0,0,0,0.10)";
+  const greenDark = "#144f2c";
+  const cardBg = "#e4e0d6";
+  const borderCol = "rgba(0,0,0,0.09)";
 
   // Was a hand-rolled regex that only caught **bold**/*italic* — every
   // list, code block, link, and heading the LLM actually outputs rendered
@@ -807,37 +809,44 @@ function UploadPageInner() {
   // still gets real <p>/<ul>/<li> block structure (the only-text branch in
   // renderAiContent doesn't go through per-segment rendering).
   const getMarkdownComponents = (isUser: boolean, inline = false): React.ComponentProps<typeof ReactMarkdown>["components"] => {
-    const linkColor = isUser ? "#fff" : green;
-    const subtleBorder = isUser ? "rgba(255,255,255,0.28)" : borderCol;
-    const inlineCodeBg = isUser ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.07)";
+    const linkColor = isUser ? "rgba(255,255,255,0.9)" : green;
+    const subtleBorder = isUser ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.08)";
+    const inlineCodeBg = isUser ? "rgba(255,255,255,0.15)" : "rgba(26,107,58,0.08)";
+    const textColor = isUser ? "rgba(255,255,255,0.95)" : "#1c2b1c";
     return {
       p: inline
         ? ({ children }) => <>{children}</>
-        : ({ children }) => <p style={{ margin: "0 0 0.65em 0" }}>{children}</p>,
-      strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
-      em: ({ children }) => <em>{children}</em>,
-      ul: ({ children }) => <ul style={{ margin: "0.3em 0 0.65em", paddingLeft: "1.4em", display: "flex", flexDirection: "column", gap: "0.28em" }}>{children}</ul>,
-      ol: ({ children }) => <ol style={{ margin: "0.3em 0 0.65em", paddingLeft: "1.5em", display: "flex", flexDirection: "column", gap: "0.28em" }}>{children}</ol>,
-      li: ({ children }) => <li style={{ lineHeight: 1.7 }}>{children}</li>,
+        : ({ children }) => <p style={{ margin: "0 0 0.8em 0", lineHeight: 1.75, color: textColor, ...sansSerif }}>{children}</p>,
+      strong: ({ children }) => <strong style={{ fontWeight: 700, color: isUser ? "#fff" : greenDark }}>{children}</strong>,
+      em: ({ children }) => <em style={{ color: textColor, opacity: 0.85 }}>{children}</em>,
+      ul: ({ children }) => <ul style={{ margin: "0.5em 0 0.9em", paddingLeft: "1.5em", display: "flex", flexDirection: "column", gap: "0.4em", ...sansSerif }}>{children}</ul>,
+      ol: ({ children }) => <ol style={{ margin: "0.5em 0 0.9em", paddingLeft: "1.6em", display: "flex", flexDirection: "column", gap: "0.4em", ...sansSerif }}>{children}</ol>,
+      li: ({ children }) => <li style={{ lineHeight: 1.75, color: textColor, paddingLeft: "0.2em" }}>{children}</li>,
       a: ({ href, children }) => (
-        <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: "2px" }}>
+        <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, fontWeight: 600, textDecoration: "underline", textUnderlineOffset: "3px" }}>
           {children}
         </a>
       ),
       blockquote: ({ children }) => (
-        <blockquote style={{ borderLeft: `3px solid ${linkColor}`, paddingLeft: "0.8em", margin: "0.5em 0", opacity: 0.85, fontStyle: "italic" }}>
+        <blockquote style={{
+          borderLeft: `3px solid ${isUser ? "rgba(255,255,255,0.4)" : green}`,
+          paddingLeft: "1em", margin: "0.7em 0",
+          background: isUser ? "rgba(255,255,255,0.06)" : "rgba(26,107,58,0.05)",
+          borderRadius: "0 4px 4px 0", padding: "0.6em 0.9em",
+          fontStyle: "italic", opacity: 0.88,
+        }}>
           {children}
         </blockquote>
       ),
-      h1: ({ children }) => <div style={{ fontWeight: 900, fontSize: "1.12em", margin: "0.5em 0 0.35em" }}>{children}</div>,
-      h2: ({ children }) => <div style={{ fontWeight: 900, fontSize: "1.05em", margin: "0.5em 0 0.3em" }}>{children}</div>,
-      h3: ({ children }) => <div style={{ fontWeight: 700, fontSize: "1em", letterSpacing: "0.03em", margin: "0.5em 0 0.25em" }}>{children}</div>,
-      hr: () => <hr style={{ border: "none", borderTop: `1px solid ${subtleBorder}`, margin: "0.8em 0" }} />,
+      h1: ({ children }) => <div style={{ fontWeight: 800, fontSize: "1.08em", margin: "1em 0 0.45em", letterSpacing: "-0.01em", color: isUser ? "#fff" : greenDark, borderBottom: `1px solid ${subtleBorder}`, paddingBottom: "0.3em", ...sansSerif }}>{children}</div>,
+      h2: ({ children }) => <div style={{ fontWeight: 700, fontSize: "1.02em", margin: "0.9em 0 0.4em", color: isUser ? "#fff" : greenDark, ...sansSerif }}>{children}</div>,
+      h3: ({ children }) => <div style={{ fontWeight: 700, fontSize: "0.96em", letterSpacing: "0.01em", margin: "0.7em 0 0.3em", color: isUser ? "rgba(255,255,255,0.9)" : green, ...sansSerif }}>{children}</div>,
+      hr: () => <hr style={{ border: "none", borderTop: `1px solid ${subtleBorder}`, margin: "1em 0" }} />,
       code: ({ className, children }) => {
-        const isBlock = Boolean(className); // fenced code blocks carry a language className; inline code doesn't
+        const isBlock = Boolean(className);
         if (!isBlock) {
           return (
-            <code style={{ background: inlineCodeBg, padding: "0.15em 0.4em", borderRadius: 3, fontSize: "0.88em" }}>
+            <code style={{ background: inlineCodeBg, padding: "0.12em 0.45em", borderRadius: 4, fontSize: "0.84em", border: `1px solid ${subtleBorder}`, fontFamily: "'Courier New', monospace" }}>
               {children}
             </code>
           );
@@ -846,24 +855,24 @@ function UploadPageInner() {
       },
       pre: ({ children }) => (
         <pre style={{
-          background: "#1a2a1a", color: "#e8f5e9", padding: "0.8em 1em", borderRadius: 6,
-          overflowX: "auto", margin: "0.5em 0", fontSize: "0.8em", lineHeight: 1.6,
-          border: `1px solid ${subtleBorder}`,
+          background: "#111d11", color: "#d4edda", padding: "0.9em 1.1em", borderRadius: 6,
+          overflowX: "auto", margin: "0.6em 0", fontSize: "0.78em", lineHeight: 1.65,
+          border: `1px solid rgba(26,107,58,0.25)`,
         }}>
           {children}
         </pre>
       ),
       table: ({ children }) => (
-        <div style={{ overflowX: "auto", margin: "0.5em 0" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.85em" }}>{children}</table>
+        <div style={{ overflowX: "auto", margin: "0.6em 0", borderRadius: 4, border: `1px solid ${subtleBorder}` }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.83em", ...sansSerif }}>{children}</table>
         </div>
       ),
       th: ({ children }) => (
-        <th style={{ border: `1px solid ${subtleBorder}`, padding: "0.35em 0.6em", textAlign: "left", background: isUser ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.04)", fontWeight: 700 }}>
+        <th style={{ border: `1px solid ${subtleBorder}`, padding: "0.45em 0.75em", textAlign: "left", background: isUser ? "rgba(255,255,255,0.1)" : "rgba(26,107,58,0.06)", fontWeight: 700, letterSpacing: "0.02em" }}>
           {children}
         </th>
       ),
-      td: ({ children }) => <td style={{ border: `1px solid ${subtleBorder}`, padding: "0.35em 0.6em" }}>{children}</td>,
+      td: ({ children }) => <td style={{ border: `1px solid ${subtleBorder}`, padding: "0.4em 0.75em", lineHeight: 1.6 }}>{children}</td>,
     };
   };
 
@@ -939,7 +948,7 @@ function UploadPageInner() {
   const visibleMessages = messages.filter(m => !m.isSystemNotice || !messages.some(x => x.role === "user"));
 
   return (
-    <div style={{ display: "flex", height: "100dvh", width: "100%", background: bg, overflow: "hidden", position: "relative", ...mono }}>
+    <div style={{ display: "flex", height: "100dvh", width: "100%", background: bg, overflow: "hidden", position: "relative", ...sansSerif }}>
 
       {/* MOBILE OVERLAY */}
       {sidebarOpen && (
@@ -952,58 +961,71 @@ function UploadPageInner() {
 
       {/* SIDEBAR */}
       <aside className={`app-sidebar${sidebarOpen ? " sidebar-open" : ""}`} style={{
-        width: 296, flexShrink: 0, background: bg, borderRight: `1px solid ${borderCol}`,
+        width: 292, flexShrink: 0, background: "#e8e4dc", borderRight: `1px solid ${borderCol}`,
         display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden",
       }}>
 
-        <div style={{ padding: "1.4rem 1.6rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="10" r="8.5" stroke={green} strokeWidth="1.5" />
-            <path d="M6 10 Q10 4.5 14 10 Q10 15.5 6 10Z" fill={green} />
-          </svg>
+        <div style={{ padding: "1.3rem 1.5rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.65rem" }}>
+          <div style={{ width: 30, height: 30, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+              <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
+              <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
+              <line x1="8" y1="10" x2="14" y2="10" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
+              <line x1="8" y1="13" x2="14" y2="13" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
+            </svg>
+          </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 900, fontSize: "0.92rem", color: "#1a2a1a", letterSpacing: "0.02em" }}>Folio</div>
-            <div style={{ fontSize: "0.58rem", letterSpacing: "0.18em", color: green, textTransform: "uppercase", opacity: 0.7, marginTop: 1 }}>agentic document intelligence</div>
+            <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#111", letterSpacing: "0.01em", ...sansSerif }}>Folio</div>
+            <div style={{ fontSize: "0.62rem", color: green, opacity: 0.75, marginTop: 1, ...sansSerif }}>Document Intelligence</div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
             className="sidebar-close-btn"
-            style={{ display: "none", background: "none", border: "none", cursor: "pointer", color: green, fontSize: "1.1rem", padding: "0.2rem", lineHeight: 1 }}
+            style={{ display: "none", background: "none", border: "none", cursor: "pointer", color: "#888", fontSize: "1.1rem", padding: "0.2rem", lineHeight: 1 }}
           >✕</button>
         </div>
 
         {/* Session History */}
-        <div style={{ padding: "1.1rem 1.4rem", flex: 1, overflowY: "auto" }}>
+        <div style={{ padding: "1rem 1.2rem", flex: 1, overflowY: "auto" }}>
           <button
             onClick={handleNewChat}
-            style={{ width: "100%", padding: "0.6rem 0", background: "transparent", border: `1px solid ${green}`, borderRadius: 4, color: green, cursor: "pointer", marginBottom: "1rem", fontSize: "0.75rem", ...mono }}
+            style={{
+              width: "100%", padding: "0.6rem 0.8rem", background: green,
+              border: "none", borderRadius: 5, color: "#fff",
+              cursor: "pointer", marginBottom: "1.1rem", fontSize: "0.78rem",
+              fontWeight: 600, letterSpacing: "0.01em", display: "flex",
+              alignItems: "center", justifyContent: "center", gap: "0.4rem",
+              ...sansSerif, transition: "opacity 0.15s",
+            }}
           >
-            + New Chat
+            <span style={{ fontSize: "1.1em", lineHeight: 1 }}>+</span> New Chat
           </button>
 
-          <div style={{ fontSize: "0.58rem", letterSpacing: "0.2em", color: green, textTransform: "uppercase", marginBottom: "0.75rem", opacity: 0.75 }}>
-            [ recent sessions ]
+          <div style={{ fontSize: "0.62rem", letterSpacing: "0.12em", color: "#888", textTransform: "uppercase", marginBottom: "0.6rem", fontWeight: 600, ...sansSerif }}>
+            Recent
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
             {sessions.map(s => (
               <div
                 key={s.id}
                 onClick={() => setActiveId(s.id)}
                 style={{
-                  padding: "0.6rem 0.8rem", borderRadius: 4, cursor: "pointer",
-                  background: activeId === s.id ? cardBg : "transparent",
-                  border: `1px solid ${activeId === s.id ? borderCol : "transparent"}`,
+                  padding: "0.55rem 0.75rem", borderRadius: 5, cursor: "pointer",
+                  background: activeId === s.id ? "rgba(26,107,58,0.1)" : "transparent",
+                  border: `1px solid ${activeId === s.id ? "rgba(26,107,58,0.2)" : "transparent"}`,
                   display: "flex", alignItems: "center", justifyContent: "space-between",
-                  fontSize: "0.75rem", color: "#1a2a1a"
+                  fontSize: "0.78rem", color: activeId === s.id ? greenDark : "#333",
+                  fontWeight: activeId === s.id ? 600 : 400, transition: "all 0.12s",
+                  ...sansSerif,
                 }}
               >
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                   {s.title || "Untitled"}
                 </span>
                 <button
                   onClick={(e) => deleteSession(s.id, e)}
-                  style={{ background: "none", border: "none", color: "#8a9a7a", cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#bbb", cursor: "pointer", fontSize: "0.7rem", padding: "0 0.1rem", flexShrink: 0, marginLeft: "0.4rem" }}
                 >
                   ✕
                 </button>
@@ -1012,36 +1034,36 @@ function UploadPageInner() {
           </div>
         </div>
 
-        <div style={{ padding: "0.85rem 1.4rem", borderTop: `1px solid ${borderCol}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.8rem" }}>
+        <div style={{ padding: "1rem 1.2rem", borderTop: `1px solid ${borderCol}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.7rem" }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 3, background: green,
+              width: 32, height: 32, borderRadius: "50%", background: green,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "0.75rem", color: "#fff", fontWeight: 900
+              fontSize: "0.78rem", color: "#fff", fontWeight: 700, flexShrink: 0, ...sansSerif
             }}>
-              {user?.email?.[0]?.toUpperCase() || "?"}
+              {user?.email?.[0]?.toUpperCase() || "G"}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: "0.72rem", color: "#1a2a1a", fontWeight: 700,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                fontSize: "0.78rem", color: "#111", fontWeight: 600,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...sansSerif
               }}>
-                {isAnonymous ? "Guest User" : user?.email?.split("@")[0]}
+                {isAnonymous ? "Guest" : user?.email?.split("@")[0]}
               </div>
               <button
                 onClick={isAnonymous ? () => setAuthModalOpen(true) : () => signOut()}
                 style={{
                   background: "none", border: "none", padding: 0,
-                  color: green, fontSize: "0.6rem", cursor: "pointer",
-                  letterSpacing: "0.1em", textTransform: "uppercase", ...mono
+                  color: green, fontSize: "0.68rem", cursor: "pointer",
+                  letterSpacing: "0", ...sansSerif,
                 }}
               >
-                {isAnonymous ? "[ sign in ]" : "[ sign out ]"}
+                {isAnonymous ? "Sign in" : "Sign out"}
               </button>
             </div>
           </div>
-          <div style={{ fontSize: "0.57rem", color: "#8a9a7a", letterSpacing: "0.08em" }}>
-            © 2026 Folio · legal document intelligence
+          <div style={{ fontSize: "0.62rem", color: "#aaa", letterSpacing: "0", ...sansSerif }}>
+            © 2026 Folio
           </div>
         </div>
       </aside>
@@ -1054,117 +1076,117 @@ function UploadPageInner() {
         <div className="bg-blob blob-1" />
         <div className="bg-blob blob-2" />
 
-        <div style={{ padding: "1.1rem 1.2rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+        <div style={{ padding: "0.85rem 1.2rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0, flexWrap: "wrap", position: "relative", zIndex: 1, background: "rgba(237,234,227,0.96)", backdropFilter: "blur(8px)" }}>
           <button
             onClick={() => setSidebarOpen(true)}
             className="hamburger-btn"
-            style={{ display: "none", background: "none", border: `1px solid ${borderCol}`, borderRadius: 3, cursor: "pointer", padding: "0.3rem 0.5rem", color: green, fontSize: "1rem", lineHeight: 1, flexShrink: 0 }}
+            style={{ display: "none", background: "none", border: `1px solid ${borderCol}`, borderRadius: 4, cursor: "pointer", padding: "0.3rem 0.5rem", color: green, fontSize: "1rem", lineHeight: 1, flexShrink: 0 }}
           >☰</button>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: "0.62rem", letterSpacing: "0.2em", color: green, opacity: 0.65, flexShrink: 0 }}>[ folio ]</div>
-            {uploadSuccess && (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: greenDark, flexShrink: 0, ...sansSerif }}>Folio</span>
+            {sessionDocs.length > 0 && (
               <>
-                <div style={{ width: 1, height: 12, background: borderCol, margin: "0 0.4rem", flexShrink: 0 }} />
-                <div style={{ fontSize: "0.63rem", color: "#5a7a5a", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Context Loaded</div>
+                <span style={{ width: 1, height: 14, background: borderCol, flexShrink: 0 }} />
+                <span style={{ fontSize: "0.75rem", color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...sansSerif }}>
+                  {sessionDocs.length === 1 ? sessionDocs[0].filename : `${sessionDocs.length} documents`}
+                </span>
               </>
             )}
             {isLoadingMessages && (
-              <div style={{ fontSize: "0.6rem", color: "#8a9a7a", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+              <div style={{ fontSize: "0.72rem", color: "#888", display: "flex", alignItems: "center", gap: "0.35rem", ...sansSerif }}>
                 <span className="mini-spinner" />
-                loading…
-              </div>
-            )}
-            {sessionDocs.length > 0 && (
-              <div style={{ fontSize: "0.6rem", color: "#5a7a5a", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {sessionDocs.length === 1 ? sessionDocs[0].filename : `${sessionDocs.length} documents`}
+                Loading…
               </div>
             )}
           </div>
           {sessionDocs.length === 2 && (
             <Link
               href={`/compare?a=${sessionDocs[0].id}&b=${sessionDocs[1].id}`}
-              style={{ fontSize: "0.62rem", color: green, textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 3, padding: "0.3rem 0.6rem", ...mono }}
+              style={{ fontSize: "0.72rem", color: green, textDecoration: "none", border: `1px solid rgba(26,107,58,0.3)`, borderRadius: 5, padding: "0.3rem 0.7rem", fontWeight: 600, ...sansSerif }}
             >
-              compare these →
+              Compare →
             </Link>
           )}
-          <Link href="/library" style={{ fontSize: "0.62rem", color: green, textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 3, padding: "0.3rem 0.6rem", ...mono }}>
-            library
+          <Link href="/library" style={{ fontSize: "0.72rem", color: "#555", textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 5, padding: "0.3rem 0.7rem", ...sansSerif }}>
+            Library
           </Link>
         </div>
 
         <div style={{
-          flex: 1, overflowY: "auto", padding: "1.4rem 1.2rem", display: "flex", flexDirection: "column", gap: "1.1rem",
+          flex: 1, overflowY: "auto", padding: "1.6rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem",
           position: "relative", zIndex: 1,
           opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
         }}>
           {messagesLoadError ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem", gap: "0.9rem" }}>
-              <div style={{ fontSize: "0.75rem", color: "#c85050", textAlign: "center", maxWidth: 320, lineHeight: 1.7 }}>
+              <div style={{ fontSize: "0.8rem", color: "#c85050", textAlign: "center", maxWidth: 340, lineHeight: 1.75, ...sansSerif }}>
                 {messagesLoadError}
               </div>
               <button
                 onClick={retryLoadMessages}
-                style={{ padding: "0.5rem 1rem", background: "transparent", border: `1px solid ${green}`, borderRadius: 4, color: green, cursor: "pointer", fontSize: "0.7rem", letterSpacing: "0.06em", ...mono }}
+                style={{ padding: "0.5rem 1.2rem", background: "transparent", border: `1px solid ${green}`, borderRadius: 6, color: green, cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, ...sansSerif }}
               >
-                retry
+                Retry
               </button>
             </div>
           ) : visibleMessages.length === 0 ? (
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem" }}>
-              <div style={{ width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.2rem" }}>
-                <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
-                  {/* A folded page/document mark — the same visual language as the
-                      sidebar logo, scaled up, with no animation — a document-
-                      analysis tool's empty state should read as composed, not
-                      playful. */}
-                  <path
-                    d="M18 8 H38 L48 18 V56 H18 Z"
-                    fill={cardBg}
-                    stroke={green}
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M38 8 V18 H48" stroke={green} strokeWidth="1.5" strokeLinejoin="round" fill="none" />
-                  <line x1="24" y1="28" x2="42" y2="28" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
-                  <line x1="24" y1="36" x2="42" y2="36" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
-                  <line x1="24" y1="44" x2="36" y2="44" stroke={green} strokeWidth="1.5" strokeLinecap="round" opacity={0.6} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.2rem" }}>
+              <div style={{ width: 64, height: 64, borderRadius: 14, background: green, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="34" height="34" viewBox="0 0 64 64" fill="none">
+                  <path d="M14 8 H40 L52 20 V56 H14 Z" fill="rgba(255,255,255,0.12)" stroke="white" strokeWidth="2" strokeLinejoin="round" />
+                  <path d="M40 8 V20 H52" stroke="white" strokeWidth="2" strokeLinejoin="round" fill="none" />
+                  <line x1="22" y1="30" x2="44" y2="30" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
+                  <line x1="22" y1="38" x2="44" y2="38" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
+                  <line x1="22" y1="46" x2="36" y2="46" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
                 </svg>
               </div>
-              <h2 style={{ fontSize: "clamp(1.2rem,3vw,1.9rem)", fontWeight: 900, color: "#1a2a1a", margin: "0 0 0.5rem", textAlign: "center", ...mono }}>
-                ask your contracts anything
-              </h2>
-              <p style={{ fontSize: "0.7rem", color: "#6a8a6a", letterSpacing: "0.07em", textAlign: "center", maxWidth: 300, lineHeight: 2, textTransform: "uppercase", margin: 0, minHeight: "2.6em" }}>
-                {typedHint}
-                {typedHint.length < EMPTY_STATE_TEXT.length && (
-                  <span style={{ display: "inline-block", width: 5, height: 10, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
-                )}
-              </p>
-              <div style={{ fontSize: "0.56rem", color: "#8a9a7a", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: "0.9rem", opacity: 0.7 }}>
-                folio · every quote verified against the source
+              <div style={{ textAlign: "center" }}>
+                <h2 style={{ fontSize: "clamp(1.1rem,2.5vw,1.6rem)", fontWeight: 700, color: "#1a2a1a", margin: "0 0 0.4rem", letterSpacing: "-0.01em", ...sansSerif }}>
+                  Ask your documents anything
+                </h2>
+                <p style={{ fontSize: "0.82rem", color: "#777", textAlign: "center", maxWidth: 340, lineHeight: 1.75, margin: "0 auto", minHeight: "2.6em", ...sansSerif }}>
+                  {typedHint}
+                  {typedHint.length < EMPTY_STATE_TEXT.length && (
+                    <span style={{ display: "inline-block", width: 5, height: 12, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
+                  )}
+                </p>
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "#aaa", ...sansSerif }}>
+                Every quote verified against the source
               </div>
             </div>
           ) : (
             visibleMessages.map((msg) => (
-              <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{
-                  maxWidth: "85%", padding: "0.9rem 1.1rem", borderRadius: 4,
-                  border: `1px solid ${borderCol}`,
-                  background: msg.role === "user" ? green : cardBg,
-                  color: msg.role === "user" ? "#fff" : "#1a2a1a",
-                }}>
-                  <div style={{ fontSize: "0.56rem", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: "0.45rem", opacity: 0.5, color: msg.role === "user" ? "#c8dfc8" : green }}>
-                    {msg.role === "ai" ? "[ folio ]" : "[ you ]"}
+              <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: "0.7rem" }}>
+                {msg.role === "ai" && (
+                  <div style={{ width: 28, height: 28, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                      <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
+                      <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
+                    </svg>
                   </div>
-                  <div style={{ fontSize: "0.81rem", lineHeight: 1.8, whiteSpace: "pre-wrap", minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center" }}>
+                )}
+                <div style={{
+                  maxWidth: msg.role === "user" ? "78%" : "84%",
+                  padding: msg.role === "user" ? "0.75rem 1rem" : "1rem 1.2rem",
+                  borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "2px 12px 12px 12px",
+                  border: msg.role === "user" ? "none" : `1px solid ${borderCol}`,
+                  background: msg.role === "user" ? green : "#fff",
+                  color: msg.role === "user" ? "#fff" : "#1c2b1c",
+                  boxShadow: msg.role === "user" ? "0 1px 8px rgba(26,107,58,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
+                }}>
+                  {msg.role === "ai" && (
+                    <div style={{ fontSize: "0.62rem", fontWeight: 700, color: green, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.5rem", ...sansSerif }}>Folio</div>
+                  )}
+                  <div style={{ fontSize: "0.83rem", lineHeight: 1.75, minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center", ...sansSerif }}>
                     {msg.isStreaming && msg.content === "" ? (
                       msg.statusText ? (
-                        <span key={msg.statusText} className="status-line-anim" style={{ display: "inline-flex", flexDirection: "column", gap: 5 }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.9 }}>
-                            <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
+                        <span key={msg.statusText} className="status-line-anim" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: green, fontWeight: 500, ...sansSerif }}>
+                            <span style={{ display: "inline-flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                               {[0, 0.15, 0.3].map((d, i) => (
-                                <span key={i} className="status-wave-dot" style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animationDelay: `${d}s` }} />
+                                <span key={i} className="status-wave-dot" style={{ width: 4, height: 4, borderRadius: "50%", background: green, display: "inline-block", animationDelay: `${d}s` }} />
                               ))}
                             </span>
                             {msg.statusText}
@@ -1174,17 +1196,13 @@ function UploadPageInner() {
                           </span>
                         </span>
                       ) : (
-                        // Before the first status event arrives (brief —
-                        // just the network round-trip) — still labeled,
-                        // same visual language as the status line below,
-                        // rather than an unexplained bare spinner.
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: "0.74rem", color: green, opacity: 0.9, minHeight: "1.4em" }}>
-                          <span style={{ display: "inline-flex", gap: 3, alignItems: "center", flexShrink: 0 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.78rem", color: green, fontWeight: 500, minHeight: "1.4em", ...sansSerif }}>
+                          <span style={{ display: "inline-flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                             {[0, 0.2, 0.4].map((d, i) => (
-                              <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
+                              <span key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
                             ))}
                           </span>
-                          Reading the document...
+                          Preparing response…
                         </span>
                       )
                     ) : (
@@ -1197,12 +1215,17 @@ function UploadPageInner() {
                           </ReactMarkdown>
                         )}
                         {msg.isStreaming && msg.content !== "" && (
-                          <span style={{ display: "inline-block", width: 7, height: 13, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
+                          <span style={{ display: "inline-block", width: 6, height: 12, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
                         )}
                       </>
                     )}
                   </div>
                 </div>
+                {msg.role === "user" && (
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1c2b1c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2, fontSize: "0.72rem", color: "#fff", fontWeight: 700, ...sansSerif }}>
+                    {user?.email?.[0]?.toUpperCase() || "Y"}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -1210,33 +1233,39 @@ function UploadPageInner() {
         </div>
 
         {/* INPUT AREA */}
-        <div style={{ borderTop: `1px solid ${borderCol}`, padding: "0.9rem 1.2rem", background: bg, flexShrink: 0, position: "relative", zIndex: 1 }}>
+        <div style={{ borderTop: `1px solid ${borderCol}`, padding: "1rem 1.5rem 1rem", background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1 }}>
 
           {/* Upload Error Banner */}
           {uploadError && (
-            <div style={{ padding: "0.5rem 0.8rem", background: "rgba(200,50,50,0.08)", border: "1px solid rgba(200,50,50,0.3)", borderRadius: 4, marginBottom: "0.6rem", fontSize: "0.7rem", color: "#c85050" }}>
+            <div style={{ padding: "0.55rem 0.9rem", background: "rgba(200,50,50,0.07)", border: "1px solid rgba(200,50,50,0.2)", borderRadius: 6, marginBottom: "0.7rem", fontSize: "0.75rem", color: "#b84040", ...sansSerif }}>
               {uploadError}
             </div>
           )}
 
           {/* File Pill */}
           {pendingFile && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.8rem", background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 4, width: "fit-content", marginBottom: "0.6rem", fontSize: "0.7rem", color: green }}>
-              <span>📎</span>
-              <span>{pendingFile.name}</span>
-              <button onClick={() => setPendingFile(null)} style={{ background: "none", border: "none", color: "#8a9a7a", cursor: "pointer", marginLeft: "0.4rem" }}>✕</button>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "rgba(26,107,58,0.08)", border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 20, marginBottom: "0.65rem", fontSize: "0.73rem", color: greenDark, fontWeight: 500, ...sansSerif }}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8 L7 13 L14 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              {pendingFile.name}
+              <button onClick={() => setPendingFile(null)} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: "0.8rem", padding: 0, lineHeight: 1, marginLeft: 2 }}>✕</button>
             </div>
           )}
 
-          <div style={{ display: "flex", gap: "0.65rem", alignItems: "flex-end" }}>
-            {/* Paperclip Button */}
+          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end" }}>
+            {/* Attach Button */}
             <button
               onClick={() => fileInputRef.current?.click()}
+              title="Attach PDF or DOCX"
               style={{
-                padding: "0.8rem 0.8rem", background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 3, cursor: "pointer", color: green, display: "flex", alignItems: "center", justifyContent: "center"
+                width: 42, height: 42, background: "#fff", border: `1px solid ${borderCol}`,
+                borderRadius: 8, cursor: "pointer", color: "#777",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: "border-color 0.15s",
               }}
             >
-              📎
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+              </svg>
             </button>
             <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
 
@@ -1244,52 +1273,65 @@ function UploadPageInner() {
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder={"ask me anything or attach a pdf..."}
+              placeholder="Ask anything about your document…"
               rows={1}
               style={{
-                flex: 1, background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 3,
-                padding: "0.8rem 0.9rem", resize: "none", outline: "none", color: "#1a2a1a",
-                fontSize: "0.78rem", lineHeight: 1.6, minHeight: 46, maxHeight: 160,
-                ...mono,
+                flex: 1, background: "#fff", border: `1px solid ${borderCol}`, borderRadius: 8,
+                padding: "0.7rem 1rem", resize: "none", outline: "none", color: "#1c2b1c",
+                fontSize: "0.83rem", lineHeight: 1.6, minHeight: 42, maxHeight: 160,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                ...sansSerif,
               }}
             />
             {isAnswering ? (
               <button
                 onClick={handleStop}
                 style={{
-                  padding: "0.8rem 1.2rem", background: "#b33939", color: "#fff",
-                  border: "none", borderRadius: 3, fontSize: "0.73rem", cursor: "pointer",
-                  letterSpacing: "0.06em", flexShrink: 0, ...mono,
+                  width: 42, height: 42, background: "#c04040", color: "#fff",
+                  border: "none", borderRadius: 8, fontSize: "0.85rem", cursor: "pointer",
+                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 }}
+                title="Stop generating"
               >
-                ■ stop
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2"/></svg>
               </button>
             ) : (
               <button
                 onClick={handleSend}
                 disabled={(!inputVal.trim() && !pendingFile) || isUploading}
                 style={{
-                  padding: "0.8rem 1.2rem",
+                  width: 42, height: 42,
                   background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.08)" : green,
-                  color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#8a9a7a" : "#fff",
-                  border: "none", borderRadius: 3, fontSize: "0.73rem",
+                  color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#aaa" : "#fff",
+                  border: "none", borderRadius: 8, fontSize: "1rem",
                   cursor: ((!inputVal.trim() && !pendingFile) || isUploading) ? "not-allowed" : "pointer",
-                  letterSpacing: "0.06em", transition: "all 0.2s ease", flexShrink: 0, ...mono,
+                  transition: "all 0.2s ease", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
                 }}
+                title={isUploading ? "Uploading…" : "Send"}
               >
-                {isUploading ? "uploading..." : "send →"}
+                {isUploading ? (
+                  <span className="mini-spinner" style={{ borderTopColor: "#aaa", borderColor: "rgba(0,0,0,0.1)" }} />
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                )}
               </button>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", marginTop: "0.65rem" }}>
-            {sessionDocs.length === 1 && (
-              <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.6rem", color: green, cursor: "pointer", letterSpacing: "0.06em" }}>
-                <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} />
-                research mode (agentic tool search)
-              </label>
-            )}
-            <div style={{ fontSize: "0.58rem", color: "#8a9a7a", letterSpacing: "0.1em" }}>
-              AI can make mistakes. Always verify the source material.
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.6rem", paddingLeft: "0.2rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              {sessionDocs.length === 1 && (
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem", color: green, cursor: "pointer", fontWeight: 500, ...sansSerif }}>
+                  <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ accentColor: green }} />
+                  Research mode
+                </label>
+              )}
+            </div>
+            <div style={{ fontSize: "0.65rem", color: "#aaa", ...sansSerif }}>
+              AI may make errors · verify sources
             </div>
           </div>
         </div>
@@ -1374,75 +1416,74 @@ function UploadPageInner() {
       )}
 
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-        @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        @keyframes statusPulse { 0%, 100% { opacity: 0.4; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
-        .status-pulse-dot { animation: statusPulse 1.1s ease-in-out infinite; }
-        @keyframes statusWave { 0%, 60%, 100% { opacity: 0.35; transform: translateY(0) scale(0.85); } 30% { opacity: 1; transform: translateY(-3px) scale(1); } }
-        .status-wave-dot { animation: statusWave 1s ease-in-out infinite; }
-        @keyframes statusLineIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .status-line-anim { animation: statusLineIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        @keyframes statusProgressSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
-        .status-progress-track { position: relative; width: 92px; height: 2px; border-radius: 1px; background: rgba(0,0,0,0.08); overflow: hidden; display: block; }
-        .status-progress-fill { position: absolute; top: 0; left: 0; width: 40%; height: 100%; border-radius: 1px; background: linear-gradient(90deg, transparent, currentColor, transparent); color: ${green}; animation: statusProgressSweep 1.3s ease-in-out infinite; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 5px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes bounce { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.5; } 50% { transform: translateY(-4px) scale(1.1); opacity: 1; } }
+        @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes statusWave { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0) scale(0.8); } 30% { opacity: 1; transform: translateY(-3px) scale(1); } }
+        .status-wave-dot { animation: statusWave 1.1s ease-in-out infinite; }
+        @keyframes statusLineIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .status-line-anim { animation: statusLineIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        @keyframes statusProgressSweep { 0% { left: -45%; width: 40%; } 50% { left: 60%; width: 20%; } 100% { left: 110%; width: 40%; } }
+        .status-progress-track {
+          position: relative;
+          width: 120px;
+          max-width: 100%;
+          height: 2px;
+          border-radius: 2px;
+          background: rgba(26,107,58,0.15);
+          overflow: hidden;
+          display: block;
+          flex-shrink: 0;
+        }
+        .status-progress-fill {
+          position: absolute;
+          top: 0;
+          height: 100%;
+          border-radius: 2px;
+          background: ${green};
+          animation: statusProgressSweep 1.6s cubic-bezier(0.4,0,0.6,1) infinite;
+        }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.13); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
 
         .bg-blob {
-          position: absolute; border-radius: 50%; filter: blur(60px);
-          opacity: 0.13; pointer-events: none; z-index: 0; background: ${green};
+          position: absolute; border-radius: 50%; filter: blur(80px);
+          opacity: 0.07; pointer-events: none; z-index: 0; background: ${green};
         }
-        .blob-1 { width: 280px; height: 280px; top: -90px; left: -70px; animation: drift1 19s ease-in-out infinite; }
-        .blob-2 { width: 220px; height: 220px; bottom: -70px; right: -50px; animation: drift2 23s ease-in-out infinite; }
-        @keyframes drift1 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(40px, 30px); } }
-        @keyframes drift2 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-30px, -25px); } }
+        .blob-1 { width: 300px; height: 300px; top: -100px; left: -80px; animation: drift1 22s ease-in-out infinite; }
+        .blob-2 { width: 240px; height: 240px; bottom: -80px; right: -60px; animation: drift2 26s ease-in-out infinite; }
+        @keyframes drift1 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(35px, 28px); } }
+        @keyframes drift2 { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-28px, -22px); } }
 
-
-        @keyframes msgEnter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes msgEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .msg-row { animation: msgEnter 0.22s ease-out; }
 
         .mini-spinner {
-          width: 8px; height: 8px; border-radius: 50%;
-          border: 1.5px solid rgba(26,107,58,0.25); border-top-color: ${green};
-          animation: spin 0.7s linear infinite; display: inline-block;
+          width: 10px; height: 10px; border-radius: 50%;
+          border: 1.5px solid rgba(26,107,58,0.2); border-top-color: ${green};
+          animation: spin 0.75s linear infinite; display: inline-block; flex-shrink: 0;
         }
 
         @media (max-width: 900px) {
           .app-sidebar {
             position: fixed !important;
-            top: 0;
-            left: 0;
+            top: 0; left: 0;
             z-index: 50;
             transform: translateX(-100%);
-            transition: transform 0.28s ease;
-            box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+            transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: 4px 0 32px rgba(0,0,0,0.15);
           }
-          .app-sidebar.sidebar-open {
-            transform: translateX(0);
-          }
-          .sidebar-overlay {
-            display: block !important;
-          }
-          .hamburger-btn {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-          }
-          .sidebar-close-btn {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-          }
+          .app-sidebar.sidebar-open { transform: translateX(0); }
+          .sidebar-overlay { display: block !important; }
+          .hamburger-btn { display: flex !important; align-items: center; justify-content: center; }
+          .sidebar-close-btn { display: flex !important; align-items: center; justify-content: center; }
         }
 
         @media (max-width: 600px) {
-          .app-sidebar {
-            width: 88vw !important;
-            max-width: 320px;
-          }
+          .app-sidebar { width: 88vw !important; max-width: 320px; }
         }
       `}</style>
     </div>

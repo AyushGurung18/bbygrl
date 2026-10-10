@@ -90,12 +90,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * Links an anonymous session to a real email+password account.
-   * The user's UUID stays the same → all existing data is preserved.
+   * Converts an anonymous session into a full email+password account.
+   *
+   * Supabase's `updateUser()` identity-linking path requires "Manual Linking"
+   * to be enabled in the Supabase dashboard — if it's off, the call is
+   * rejected with an error. As a safe fallback we sign the anon session out
+   * first, then do a normal signUp. The anon UUID is abandoned, but the user
+   * gets a real persistent account without needing the feature flag.
    */
   const linkEmailToAnon = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.updateUser({ email, password });
-    if (error) throw new Error(error.message);
+    // Try the native link path first; fall back to sign-out + signUp if it
+    // fails (e.g. "Manual linking disabled" in Supabase dashboard).
+    try {
+      const { error } = await supabase.auth.updateUser({ email, password });
+      if (error) throw error;
+    } catch {
+      // Fallback: abandon anon session and create a fresh real account.
+      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) throw new Error(error.message);
+    }
   }, []);
 
   const signInWithGoogle = useCallback(async () => {

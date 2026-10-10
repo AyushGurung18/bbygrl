@@ -31,30 +31,26 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setInfo("");
       setEmail("");
       setPassword("");
+      setIsSignUp(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
+  const sans = { fontFamily: "'Inter', system-ui, -apple-system, sans-serif" } as React.CSSProperties;
   const green = "#1a6b3a";
-  const bg = "#e6e1d8";
-  const card = "#dedad0";
+  const greenDark = "#144f2c";
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError("");
-    setInfo("");
+    setInfo("Redirecting to Google…");
     try {
-      if (isAnonymous) {
-        setInfo("Connecting to Google to save your guest session...");
-      } else {
-        setInfo("Connecting to Google Sign-In...");
-      }
       await signInWithGoogle();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to initialize Google sign-in.");
       setLoading(false);
+      setInfo("");
     }
   };
 
@@ -70,26 +66,27 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     try {
       if (isSignUp) {
         if (isAnonymous) {
-          setInfo("Linking guest session to your new account...");
+          setInfo("Creating your account…");
           await linkEmailToAnon(email, password);
-          setInfo("Success! Account linked. Logging in...");
+          setInfo("Account created successfully!");
         } else {
-          setInfo("Creating your account...");
+          setInfo("Creating your account…");
           await signUpWithEmail(email, password);
-          setInfo("Success! Account created. Verification email sent if configured.");
+          setInfo("Account created! Check your email if verification is required.");
         }
       } else {
-        setInfo("Signing you in...");
+        setInfo("Signing you in…");
         await signInWithEmail(email, password);
-        setInfo("Success! Logged in.");
+        setInfo("Signed in successfully!");
       }
       setTimeout(() => {
         onClose();
         setLoading(false);
-      }, 1200);
+      }, 1000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
       setLoading(false);
+      setInfo("");
     }
   };
 
@@ -100,9 +97,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         onClick={onClose}
         style={{
           position: "fixed", inset: 0, zIndex: 200,
-          background: "rgba(15,20,15,0.55)",
-          backdropFilter: "blur(4px)",
-          animation: "fadeIn 0.18s ease",
+          background: "rgba(10,16,10,0.6)",
+          backdropFilter: "blur(6px)",
+          animation: "amFadeIn 0.18s ease",
         }}
       />
 
@@ -111,134 +108,142 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         style={{
           position: "fixed", top: "50%", left: "50%", zIndex: 201,
           transform: "translate(-50%,-50%)",
-          width: "min(400px, 92vw)",
-          background: card, borderRadius: 6,
-          border: `1px solid rgba(0,0,0,0.12)`,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.22)",
-          animation: "slideUp 0.22s ease",
-          ...mono,
-          padding: 0,
-          boxSizing: "border-box"
+          width: "min(420px, 94vw)",
+          background: "#fff",
+          borderRadius: 12,
+          border: "1px solid rgba(0,0,0,0.08)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
+          animation: "amSlideUp 0.22s cubic-bezier(0.2,0.8,0.2,1)",
+          ...sans,
+          overflow: "hidden",
         }}
       >
         {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "1.2rem 1.4rem", borderBottom: `1px solid rgba(0,0,0,0.09)`,
+          padding: "1.3rem 1.5rem",
+          borderBottom: "1px solid rgba(0,0,0,0.07)",
+          background: "#fafafa",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="8.5" stroke={green} strokeWidth="1.5" />
-              <path d="M6 10 Q10 4.5 14 10 Q10 15.5 6 10Z" fill={green} />
-            </svg>
-            <span style={{ fontWeight: 900, fontSize: "0.88rem", color: "#1a2a1a", letterSpacing: "0.02em" }}>
-              greptile
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
+                <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
+                <line x1="8" y1="10" x2="14" y2="10" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
+                <line x1="8" y1="13" x2="14" y2="13" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
+              </svg>
+            </div>
+            <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#111", letterSpacing: "-0.01em" }}>
+              Folio
             </span>
           </div>
           <button
             onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "#8a9a7a", fontSize: "1rem", lineHeight: 1, padding: "0.2rem" }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: "1.1rem", lineHeight: 1, padding: "0.2rem", borderRadius: 4 }}
             aria-label="Close"
           >✕</button>
         </div>
 
         {/* Content Body */}
-        <div style={{ padding: "1.6rem 1.4rem" }}>
-          {isAnonymous ? (
-            <div style={{
-              marginBottom: "1.4rem", padding: "0.85rem 1rem",
-              background: "rgba(26,107,58,0.07)", borderRadius: 4,
-              border: `1px solid rgba(26,107,58,0.15)`,
-              fontSize: "0.74rem", color: green, lineHeight: 1.6, letterSpacing: "0.02em",
-            }}>
-              <div style={{ fontWeight: "bold", marginBottom: "0.25rem" }}>✦ GUEST SESSION ACTIVE</div>
-              Sign in with Google to preserve all your uploaded PDFs and chat sessions. Your guest history will automatically link to your Google account!
-            </div>
-          ) : (
-            <div style={{
-              marginBottom: "1.4rem", padding: "0.85rem 1rem",
-              background: "rgba(0,0,0,0.02)", borderRadius: 4,
-              border: `1px solid rgba(0,0,0,0.06)`,
-              fontSize: "0.74rem", color: "#4a5a4a", lineHeight: 1.6, letterSpacing: "0.02em",
-            }}>
-              Welcome! Sign in with Google to access your private workspace, index custom PDFs, and sync your sessions.
-            </div>
-          )}
+        <div style={{ padding: "1.6rem 1.5rem" }}>
 
+          {/* Context banner */}
+          <div style={{
+            marginBottom: "1.4rem", padding: "0.85rem 1rem",
+            background: isAnonymous ? "rgba(26,107,58,0.06)" : "rgba(0,0,0,0.02)",
+            borderRadius: 8,
+            border: `1px solid ${isAnonymous ? "rgba(26,107,58,0.15)" : "rgba(0,0,0,0.06)"}`,
+            fontSize: "0.8rem", color: isAnonymous ? greenDark : "#555", lineHeight: 1.65,
+          }}>
+            {isAnonymous
+              ? <><strong style={{ display: "block", marginBottom: "0.2rem", color: green }}>Guest session active</strong>Sign in to preserve your uploaded documents and chat history across devices.</>
+              : "Sign in to access your private workspace and sync sessions across devices."
+            }
+          </div>
+
+          {/* Error */}
           {error && (
             <div style={{
-              marginBottom: "1.2rem", padding: "0.7rem 0.9rem",
-              background: "rgba(180,30,30,0.07)", borderRadius: 4,
-              border: "1px solid rgba(180,30,30,0.2)",
-              fontSize: "0.74rem", color: "#b41e1e", lineHeight: 1.5,
+              marginBottom: "1rem", padding: "0.7rem 0.9rem",
+              background: "rgba(180,30,30,0.06)", borderRadius: 8,
+              border: "1px solid rgba(180,30,30,0.18)",
+              fontSize: "0.78rem", color: "#b41e1e", lineHeight: 1.55,
             }}>
               {error}
             </div>
           )}
 
+          {/* Info */}
           {info && (
             <div style={{
-              marginBottom: "1.2rem", padding: "0.7rem 0.9rem",
-              background: "rgba(26,107,58,0.08)", borderRadius: 4,
-              border: `1px solid rgba(26,107,58,0.25)`,
-              fontSize: "0.74rem", color: green, lineHeight: 1.5,
+              marginBottom: "1rem", padding: "0.7rem 0.9rem",
+              background: "rgba(26,107,58,0.07)", borderRadius: 8,
+              border: `1px solid rgba(26,107,58,0.2)`,
+              fontSize: "0.78rem", color: green, lineHeight: 1.55,
+              display: "flex", alignItems: "center", gap: "0.5rem",
             }}>
+              <span className="am-spinner" />
               {info}
             </div>
           )}
 
-          {/* Premium Google Button */}
+          {/* Google */}
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="google-signin-btn"
+            className="am-google-btn"
             style={{
               width: "100%",
-              padding: "0.85rem 1rem",
+              padding: "0.8rem 1rem",
               background: "#fff",
-              color: "#374151",
+              color: "#333",
               border: "1px solid rgba(0,0,0,0.15)",
-              borderRadius: 4,
-              fontSize: "0.8rem",
-              fontWeight: 700,
+              borderRadius: 8,
+              fontSize: "0.85rem",
+              fontWeight: 600,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              gap: "0.75rem",
               cursor: loading ? "not-allowed" : "pointer",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-              opacity: loading ? 0.7 : 1,
-              ...mono,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              transition: "all 0.18s ease",
+              opacity: loading ? 0.65 : 1,
+              ...sans,
             }}
           >
-            {loading ? (
+            {loading && !info.includes("Redirect") ? (
               <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
-                {[0, 0.2, 0.4].map((d, i) => (
-                  <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `bounce 1s ${d}s infinite ease-in-out` }} />
+                {[0, 0.18, 0.36].map((d, i) => (
+                  <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: green, display: "inline-block", animation: `amBounce 0.9s ${d}s infinite ease-in-out` }} />
                 ))}
               </span>
             ) : (
               <>
-                <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: "0.75rem", flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.77c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                [ sign in with google ]
+                Continue with Google
               </>
             )}
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", margin: "1.2rem 0", gap: "0.5rem" }}>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
-            <span style={{ fontSize: "0.62rem", color: "#8a9a7a", letterSpacing: "0.1em", textTransform: "uppercase" }}>or use email</span>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
+          <div style={{ display: "flex", alignItems: "center", margin: "1.2rem 0", gap: "0.6rem" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.07)" }} />
+            <span style={{ fontSize: "0.72rem", color: "#bbb", letterSpacing: "0.04em" }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.07)" }} />
           </div>
 
-          <form onSubmit={handleEmailSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-              <label htmlFor="auth-email" style={{ fontSize: "0.65rem", fontWeight: 700, color: "#4a5a4a", textTransform: "uppercase" }}>Email Address</label>
+          {/* Email form */}
+          <form onSubmit={handleEmailSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+              <label htmlFor="auth-email" style={{ fontSize: "0.72rem", fontWeight: 600, color: "#555", letterSpacing: "0.01em" }}>
+                Email address
+              </label>
               <input
                 id="auth-email"
                 type="email"
@@ -247,19 +252,22 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@domain.com"
                 style={{
-                  padding: "0.6rem 0.75rem",
-                  fontSize: "0.78rem",
-                  background: bg,
-                  border: "1px solid rgba(0,0,0,0.15)",
-                  borderRadius: 4,
-                  color: "#1a2a1a",
+                  padding: "0.65rem 0.85rem",
+                  fontSize: "0.85rem",
+                  background: "#fafafa",
+                  border: "1px solid rgba(0,0,0,0.13)",
+                  borderRadius: 8,
+                  color: "#111",
                   outline: "none",
-                  ...mono,
+                  ...sans,
+                  transition: "border-color 0.15s",
                 }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-              <label htmlFor="auth-password" style={{ fontSize: "0.65rem", fontWeight: 700, color: "#4a5a4a", textTransform: "uppercase" }}>Password</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+              <label htmlFor="auth-password" style={{ fontSize: "0.72rem", fontWeight: 600, color: "#555", letterSpacing: "0.01em" }}>
+                Password
+              </label>
               <input
                 id="auth-password"
                 type="password"
@@ -267,54 +275,58 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
+                minLength={6}
                 style={{
-                  padding: "0.6rem 0.75rem",
-                  fontSize: "0.78rem",
-                  background: bg,
-                  border: "1px solid rgba(0,0,0,0.15)",
-                  borderRadius: 4,
-                  color: "#1a2a1a",
+                  padding: "0.65rem 0.85rem",
+                  fontSize: "0.85rem",
+                  background: "#fafafa",
+                  border: "1px solid rgba(0,0,0,0.13)",
+                  borderRadius: 8,
+                  color: "#111",
                   outline: "none",
-                  ...mono,
+                  ...sans,
+                  transition: "border-color 0.15s",
                 }}
               />
+              {isSignUp && (
+                <span style={{ fontSize: "0.68rem", color: "#aaa", marginTop: 2 }}>Minimum 6 characters</span>
+              )}
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="email-submit-btn"
+              className="am-submit-btn"
               style={{
                 width: "100%",
-                padding: "0.8rem 1rem",
-                background: green,
+                padding: "0.78rem 1rem",
+                background: loading ? "rgba(26,107,58,0.6)" : green,
                 color: "#fff",
                 border: "none",
-                borderRadius: 4,
-                fontSize: "0.78rem",
-                fontWeight: 700,
+                borderRadius: 8,
+                fontSize: "0.85rem",
+                fontWeight: 600,
                 cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                transition: "all 0.2s ease",
-                opacity: loading ? 0.7 : 1,
-                textTransform: "uppercase",
-                ...mono,
+                transition: "all 0.18s ease",
+                marginTop: "0.2rem",
+                ...sans,
               }}
             >
-              {loading ? "[ loading... ]" : isSignUp ? (isAnonymous ? "[ link & sign up ]" : "[ sign up ]") : "[ sign in ]"}
+              {loading ? "Please wait…" : isSignUp ? (isAnonymous ? "Create account" : "Create account") : "Sign in"}
             </button>
           </form>
 
           <div style={{ marginTop: "1rem", textAlign: "center" }}>
             <button
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => { setIsSignUp(!isSignUp); setError(""); setInfo(""); }}
               style={{
                 background: "none", border: "none", cursor: "pointer",
-                fontSize: "0.68rem", color: green, fontWeight: 700,
-                letterSpacing: "0.05em", textDecoration: "underline", ...mono,
+                fontSize: "0.75rem", color: green, fontWeight: 600,
+                textDecoration: "underline", textUnderlineOffset: "2px",
+                ...sans,
               }}
             >
-              {isSignUp ? "already have an account? sign in" : "need an account? sign up"}
+              {isSignUp ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
             </button>
           </div>
 
@@ -323,39 +335,51 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onClick={onClose}
               style={{
                 background: "none", border: "none", cursor: "pointer",
-                fontSize: "0.68rem", color: "#8a9a7a",
-                letterSpacing: "0.1em", textDecoration: "underline", ...mono,
+                fontSize: "0.72rem", color: "#bbb",
+                ...sans,
               }}
             >
-              continue as guest →
+              Continue as guest
             </button>
           </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes slideUp { from { opacity: 0; transform: translate(-50%,-46%) } to { opacity: 1; transform: translate(-50%,-50%) } }
-        @keyframes bounce  { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
-        
-        .google-signin-btn:hover {
-          background: #f9f9f9 !important;
-          border-color: ${green} !important;
+        @keyframes amFadeIn  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes amSlideUp { from { opacity: 0; transform: translate(-50%,-47%) scale(0.97) } to { opacity: 1; transform: translate(-50%,-50%) scale(1) } }
+        @keyframes amBounce  { 0%, 100% { transform: translateY(0) scale(1); opacity: 0.5 } 50% { transform: translateY(-4px) scale(1.1); opacity: 1 } }
+        @keyframes amSpin    { to { transform: rotate(360deg) } }
+
+        .am-spinner {
+          display: inline-block;
+          width: 10px; height: 10px;
+          border-radius: 50%;
+          border: 1.5px solid rgba(26,107,58,0.25);
+          border-top-color: #1a6b3a;
+          animation: amSpin 0.75s linear infinite;
+          flex-shrink: 0;
+        }
+
+        .am-google-btn:hover:not(:disabled) {
+          border-color: rgba(0,0,0,0.25) !important;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.1) !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(26,107,58,0.12) !important;
         }
-        .google-signin-btn:active {
+        .am-google-btn:active:not(:disabled) {
           transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
         }
-        .email-submit-btn:hover {
-          background: #14502b !important;
+        .am-submit-btn:hover:not(:disabled) {
+          background: #144f2c !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(26,107,58,0.2) !important;
+          box-shadow: 0 4px 14px rgba(26,107,58,0.28) !important;
         }
-        .email-submit-btn:active {
+        .am-submit-btn:active:not(:disabled) {
           transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+        #auth-email:focus, #auth-password:focus {
+          border-color: rgba(26,107,58,0.4) !important;
+          box-shadow: 0 0 0 3px rgba(26,107,58,0.08);
         }
       `}</style>
     </>
