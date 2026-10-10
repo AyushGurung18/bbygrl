@@ -59,6 +59,7 @@ function UploadPageInner() {
   const [sessionDocs, setSessionDocs] = useState<SessionDoc[]>([]);
   const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
   const [agenticMode, setAgenticMode] = useState(false);
+  const [inputExpanded, setInputExpanded] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const appliedUrlSessionRef = useRef(false);
 
@@ -889,6 +890,15 @@ function UploadPageInner() {
       .replace(/[\u{201C}\u{201D}\u{AB}\u{BB}]/gu, '"')
       .trim();
     const utt = new SpeechSynthesisUtterance(clean);
+    
+    // Attempt to pick a higher quality voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const bestVoice = voices.find(v => v.name.includes("Google US English") || v.name.includes("Google UK English Female") || v.name.includes("Samantha"))
+      || voices.find(v => v.lang.startsWith("en-US"))
+      || voices.find(v => v.lang.startsWith("en-GB"))
+      || voices[0];
+    if (bestVoice) utt.voice = bestVoice;
+    
     utt.rate = 0.95;
     utt.onend = () => setSpeakingId(null);
     utt.onerror = () => setSpeakingId(null);
@@ -1112,7 +1122,7 @@ function UploadPageInner() {
   const visibleMessages = messages.filter(m => !m.isSystemNotice || !messages.some(x => x.role === "user"));
 
   return (
-    <div style={{ display: "flex", position: "fixed", inset: 0, width: "100%", background: bg, overflow: "hidden", ...sansSerif }}>
+    <div style={{ display: "flex", height: "100dvh", width: "100vw", background: bg, overflow: "hidden", ...sansSerif }}>
 
       {/* MOBILE OVERLAY */}
       {sidebarOpen && (
@@ -1431,10 +1441,35 @@ function UploadPageInner() {
             {/* Input Pill */}
             <div style={{ 
               display: "flex", gap: "0.4rem", alignItems: "flex-end", 
-              background: "#fff", borderRadius: 24, padding: "0.4rem", 
+              background: "#fff", borderRadius: inputExpanded ? 16 : 24, padding: "0.4rem", 
               border: "1px solid rgba(0,0,0,0.08)",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.03)"
+              boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+              position: "relative"
             }}>
+              
+              {/* Expand/Collapse Button */}
+              {inputVal && (
+                <button
+                  onClick={() => setInputExpanded(!inputExpanded)}
+                  title={inputExpanded ? "Collapse input" : "Expand input"}
+                  style={{
+                    position: "absolute", top: "0.4rem", right: "0.5rem",
+                    background: "rgba(0,0,0,0.04)", border: "none", borderRadius: 4,
+                    padding: "0.2rem", cursor: "pointer", color: "#888",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s ease", zIndex: 10
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; e.currentTarget.style.color = "#333"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; e.currentTarget.style.color = "#888"; }}
+                >
+                  {inputExpanded ? (
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12l8-8M4 4v8h8"/></svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4L4 12M12 12V4H4"/></svg>
+                  )}
+                </button>
+              )}
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach PDF or DOCX"
@@ -1456,14 +1491,25 @@ function UploadPageInner() {
 
               <textarea
                 value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
+                onChange={(e) => {
+                  setInputVal(e.target.value);
+                  // Auto-expand if lines get too long
+                  if (!inputExpanded && e.target.value.split('\n').length > 4) {
+                    setInputExpanded(true);
+                  }
+                }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                 placeholder="Ask anything about your document…"
                 rows={1}
                 style={{
                   flex: 1, background: "transparent", border: "none",
-                  padding: "0.55rem 0.5rem", resize: "none", outline: "none", color: "#1c2b1c",
-                  fontSize: "0.85rem", lineHeight: 1.5, minHeight: 36, maxHeight: 120,
+                  padding: inputExpanded ? "0.8rem 0.5rem 0.5rem" : "0.55rem 0.5rem", 
+                  resize: "none", outline: "none", color: "#1c2b1c",
+                  fontSize: "0.85rem", lineHeight: 1.5, 
+                  minHeight: 36, 
+                  maxHeight: inputExpanded ? "55vh" : 120,
+                  height: inputExpanded ? "250px" : undefined,
+                  transition: "max-height 0.2s ease, padding 0.2s ease",
                   ...sansSerif,
                 }}
               />
