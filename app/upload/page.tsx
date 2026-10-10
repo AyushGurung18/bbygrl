@@ -88,6 +88,7 @@ function UploadPageInner() {
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const deletingSessionsRef = useRef<Set<string>>(new Set());
 
   const lastLoadedSessionIdRef = useRef<string | null>(null);
@@ -412,6 +413,14 @@ function UploadPageInner() {
       chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [messages, isAnswering]);
+
+  // --- Auto-resize input when collapsing ---
+  useEffect(() => {
+    if (!inputExpanded && inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+    }
+  }, [inputExpanded]);
 
   // --- Upload Handlers ---
   const ACCEPTED_EXTENSIONS = [".pdf", ".docx"];
@@ -1498,6 +1507,7 @@ function UploadPageInner() {
               <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
 
               <textarea
+                ref={inputRef}
                 value={inputVal}
                 onChange={(e) => {
                   setInputVal(e.target.value);

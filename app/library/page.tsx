@@ -320,30 +320,54 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {selected.size > 0 && (
+        {/* Selection action bar */}
+        {selected.size > 0 ? (
           <div style={{
-            display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1rem",
-            padding: "0.6rem 0.9rem", background: cardBg, border: `1px solid ${borderCol}`, borderRadius: 4, fontSize: "0.72rem",
+            display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem", flexWrap: "wrap",
+            padding: "0.65rem 1rem", background: `rgba(26,107,58,0.06)`,
+            border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 6, fontSize: "0.72rem",
           }}>
-            <span>{selected.size} selected</span>
-            <button
-              onClick={askAcrossSelected}
-              disabled={selected.size < 2 || busyAction}
-              style={{ ...pillBtn, opacity: selected.size < 2 ? 0.4 : 1 }}
-            >
-              ask across selected →
-            </button>
-            <button
-              onClick={compareSelected}
-              disabled={selected.size !== 2 || busyAction}
-              style={{ ...pillBtn, opacity: selected.size !== 2 ? 0.4 : 1 }}
-            >
-              compare (needs exactly 2) →
-            </button>
-            <button onClick={() => setSelected(new Set())} style={{ ...pillBtn, marginLeft: "auto" }}>
-              clear
-            </button>
+            <span style={{ fontWeight: 700, color: green }}>
+              {selected.size} document{selected.size !== 1 ? "s" : ""} selected
+            </span>
+            {selected.size === 1 && (
+              <span style={{ color: "#8a9a7a", fontSize: "0.68rem" }}>— select 1 more to compare or ask across</span>
+            )}
+            <div style={{ display: "flex", gap: "0.5rem", marginLeft: "auto", flexWrap: "wrap" }}>
+              <button
+                onClick={askAcrossSelected}
+                disabled={selected.size < 2 || busyAction}
+                style={{ ...pillBtn, opacity: selected.size < 2 ? 0.35 : 1 }}
+              >
+                Ask across {selected.size} docs →
+              </button>
+              <button
+                onClick={compareSelected}
+                disabled={selected.size !== 2 || busyAction}
+                title={selected.size !== 2 ? "Select exactly 2 documents to compare" : "Compare these 2 documents"}
+                style={{
+                  ...pillBtn,
+                  background: selected.size === 2 ? green : "rgba(0,0,0,0.06)",
+                  color: selected.size === 2 ? "#fff" : "#aaa",
+                  border: selected.size === 2 ? `1px solid ${green}` : `1px solid ${borderCol}`,
+                  cursor: selected.size !== 2 ? "not-allowed" : "pointer",
+                }}
+              >
+                {selected.size === 2 ? "Compare side-by-side →" : `Compare (need exactly 2)`}
+              </button>
+              <button onClick={() => setSelected(new Set())} style={{ ...pillBtn, color: "#888" }}>Clear</button>
+            </div>
           </div>
+        ) : (
+          docs.length > 0 && (
+            <div style={{
+              fontSize: "0.7rem", color: "#8a9a7a", marginBottom: "0.8rem",
+              padding: "0.45rem 0.7rem", background: "rgba(0,0,0,0.03)",
+              borderRadius: 5, border: `1px solid ${borderCol}`,
+            }}>
+              Tip: Click the checkbox on documents to select them, then compare or ask across multiple at once.
+            </div>
+          )
         )}
 
         {loading ? (
