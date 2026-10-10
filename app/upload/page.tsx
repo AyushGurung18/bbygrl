@@ -1076,7 +1076,7 @@ function UploadPageInner() {
         <div className="bg-blob blob-1" />
         <div className="bg-blob blob-2" />
 
-        <div style={{ padding: "0.85rem 1.2rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0, flexWrap: "wrap", position: "relative", zIndex: 1, background: "rgba(237,234,227,0.96)", backdropFilter: "blur(8px)" }}>
+        <div style={{ padding: "0.85rem 1.2rem", borderBottom: `1px solid rgba(0,0,0,0.05)`, display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0, flexWrap: "wrap", position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, background: "rgba(250, 249, 246, 0.85)", backdropFilter: "blur(12px)" }}>
           <button
             onClick={() => setSidebarOpen(true)}
             className="hamburger-btn"
@@ -1084,11 +1084,11 @@ function UploadPageInner() {
           >☰</button>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: greenDark, flexShrink: 0, ...sansSerif }}>Folio</span>
+            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: greenDark, flexShrink: 0, ...sansSerif }}>Folio</span>
             {sessionDocs.length > 0 && (
               <>
                 <span style={{ width: 1, height: 14, background: borderCol, flexShrink: 0 }} />
-                <span style={{ fontSize: "0.75rem", color: "#555", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...sansSerif }}>
+                <span style={{ fontSize: "0.75rem", color: "#666", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500, ...sansSerif }}>
                   {sessionDocs.length === 1 ? sessionDocs[0].filename : `${sessionDocs.length} documents`}
                 </span>
               </>
@@ -1108,13 +1108,13 @@ function UploadPageInner() {
               Compare →
             </Link>
           )}
-          <Link href="/library" style={{ fontSize: "0.72rem", color: "#555", textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 5, padding: "0.3rem 0.7rem", ...sansSerif }}>
+          <Link href="/library" style={{ fontSize: "0.72rem", color: "#555", textDecoration: "none", border: `1px solid rgba(0,0,0,0.1)`, borderRadius: 5, padding: "0.3rem 0.7rem", fontWeight: 500, transition: "background 0.15s", ...sansSerif }} onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.03)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             Library
           </Link>
         </div>
 
         <div style={{
-          flex: 1, overflowY: "auto", padding: "1.6rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem",
+          flex: 1, overflowY: "auto", padding: "4.5rem 1.5rem 10rem", display: "flex", flexDirection: "column", gap: "1.2rem",
           position: "relative", zIndex: 1,
           opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
         }}>
@@ -1232,124 +1232,142 @@ function UploadPageInner() {
           <div ref={chatBottomRef} />
         </div>
 
-        {/* INPUT AREA */}
-        <div style={{ borderTop: `1px solid rgba(0,0,0,0.06)`, padding: "0.75rem 1.5rem", background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1 }}>
-
-          {/* Upload Error Banner */}
-          {uploadError && (
-            <div style={{ padding: "0.55rem 0.9rem", background: "rgba(200,50,50,0.07)", border: "1px solid rgba(200,50,50,0.2)", borderRadius: 6, marginBottom: "0.7rem", fontSize: "0.75rem", color: "#b84040", ...sansSerif }}>
-              {uploadError}
-            </div>
-          )}
-
-          {/* File Pill */}
-          {pendingFile && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "rgba(26,107,58,0.08)", border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 20, marginBottom: "0.65rem", fontSize: "0.73rem", color: greenDark, fontWeight: 500, ...sansSerif }}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8 L7 13 L14 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              {pendingFile.name}
-              <button onClick={() => setPendingFile(null)} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: "0.8rem", padding: 0, lineHeight: 1, marginLeft: 2 }}>✕</button>
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end" }}>
-            {/* Attach Button */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach PDF or DOCX"
-              style={{
-                width: 40, height: 40, background: "#fff", border: "1px solid rgba(0,0,0,0.08)",
-                borderRadius: "50%", cursor: "pointer", color: "#666",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, transition: "all 0.15s ease",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = "#f7f7f7"}
-              onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-              </svg>
-            </button>
-            <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
-
-            <textarea
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Ask anything about your document…"
-              rows={1}
-              style={{
-                flex: 1, background: "#fff", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 24,
-                padding: "0.65rem 1.2rem", resize: "none", outline: "none", color: "#1c2b1c",
-                fontSize: "0.83rem", lineHeight: 1.5, minHeight: 40, maxHeight: 120,
-                boxShadow: "0 1px 4px rgba(0,0,0,0.03) inset",
-                ...sansSerif,
-              }}
-            />
-            {isAnswering ? (
-              <button
-                onClick={handleStop}
-                style={{
-                  width: 40, height: 40, background: "#333", color: "#fff",
-                  border: "none", borderRadius: "50%", fontSize: "0.85rem", cursor: "pointer",
-                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-                }}
-                title="Stop generating"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2"/></svg>
-              </button>
-            ) : (
-              <button
-                onClick={handleSend}
-                disabled={(!inputVal.trim() && !pendingFile) || isUploading}
-                style={{
-                  width: 40, height: 40,
-                  background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.05)" : green,
-                  color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#aaa" : "#fff",
-                  border: "none", borderRadius: "50%", fontSize: "1rem",
-                  cursor: ((!inputVal.trim() && !pendingFile) || isUploading) ? "not-allowed" : "pointer",
-                  transition: "all 0.2s ease", flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: ((!inputVal.trim() && !pendingFile) || isUploading) ? "none" : "0 2px 8px rgba(26,107,58,0.3)",
-                }}
-                title={isUploading ? "Uploading…" : "Send"}
-              >
-                {isUploading ? (
-                  <span className="mini-spinner" style={{ borderTopColor: "#aaa", borderColor: "rgba(0,0,0,0.1)" }} />
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: "translateX(-1px) translateY(1px)" }}>
-                    <line x1="22" y1="2" x2="11" y2="13"/>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                  </svg>
-                )}
-              </button>
+        {/* INPUT AREA - FLOATING */}
+        <div style={{ 
+          position: "absolute", bottom: 0, left: 0, right: 0, 
+          background: "linear-gradient(to top, rgba(237,234,227,1) 50%, rgba(237,234,227,0) 100%)",
+          padding: "3rem 1.5rem 1.2rem", flexShrink: 0, zIndex: 10,
+          display: "flex", flexDirection: "column", alignItems: "center", pointerEvents: "none"
+        }}>
+          <div style={{ width: "100%", maxWidth: "760px", pointerEvents: "auto", display: "flex", flexDirection: "column" }}>
+            
+            {/* Upload Error Banner */}
+            {uploadError && (
+              <div style={{ padding: "0.55rem 0.9rem", background: "rgba(200,50,50,0.07)", border: "1px solid rgba(200,50,50,0.2)", borderRadius: 8, marginBottom: "0.7rem", fontSize: "0.75rem", color: "#b84040", ...sansSerif, alignSelf: "center", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+                {uploadError}
+              </div>
             )}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.6rem", paddingLeft: "0.2rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {sessionDocs.length === 1 && (
-                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", userSelect: "none" }}>
-                  <div style={{ 
-                    width: 28, height: 16, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
-                    position: "relative", transition: "background 0.25s ease" 
-                  }}>
-                    <div style={{ 
-                      width: 12, height: 12, borderRadius: "50%", background: "#fff", 
-                      position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
-                      transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                      boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
-                    }} />
-                  </div>
-                  <span style={{ fontSize: "0.72rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
-                    Agentic mode
-                  </span>
-                  <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
-                </label>
+
+            {/* File Pill */}
+            {pendingFile && (
+              <div style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", background: "#fff", border: `1px solid rgba(26,107,58,0.2)`, borderRadius: 20, marginBottom: "0.65rem", fontSize: "0.73rem", color: greenDark, fontWeight: 500, boxShadow: "0 2px 8px rgba(0,0,0,0.04)", ...sansSerif }}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M2 8 L7 13 L14 3" stroke={green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                {pendingFile.name}
+                <button onClick={() => setPendingFile(null)} style={{ background: "none", border: "none", color: "#999", cursor: "pointer", fontSize: "0.8rem", padding: 0, lineHeight: 1, marginLeft: 4 }}>✕</button>
+              </div>
+            )}
+
+            {/* Floating Input Pill */}
+            <div style={{ 
+              display: "flex", gap: "0.4rem", alignItems: "flex-end", 
+              background: "#fff", borderRadius: 24, padding: "0.4rem", 
+              boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)", 
+              border: "1px solid rgba(0,0,0,0.06)" 
+            }}>
+              
+              {/* Attach Button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach PDF or DOCX"
+                style={{
+                  width: 36, height: 36, background: "transparent", border: "none",
+                  borderRadius: "50%", cursor: "pointer", color: "#777",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "background 0.15s ease",
+                  marginBottom: 2, marginLeft: 2
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+              </button>
+              <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
+
+              <textarea
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="Ask anything about your document…"
+                rows={1}
+                style={{
+                  flex: 1, background: "transparent", border: "none",
+                  padding: "0.55rem 0.5rem", resize: "none", outline: "none", color: "#1c2b1c",
+                  fontSize: "0.85rem", lineHeight: 1.5, minHeight: 36, maxHeight: 120,
+                  ...sansSerif,
+                }}
+              />
+              
+              {/* Send/Stop Button */}
+              {isAnswering ? (
+                <button
+                  onClick={handleStop}
+                  style={{
+                    width: 36, height: 36, background: "#333", color: "#fff",
+                    border: "none", borderRadius: "50%", cursor: "pointer",
+                    flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.15)", marginBottom: 2, marginRight: 2
+                  }}
+                  title="Stop generating"
+                >
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor"><rect width="12" height="12" rx="2"/></svg>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={(!inputVal.trim() && !pendingFile) || isUploading}
+                  style={{
+                    width: 36, height: 36,
+                    background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.04)" : green,
+                    color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#bbb" : "#fff",
+                    border: "none", borderRadius: "50%",
+                    cursor: ((!inputVal.trim() && !pendingFile) || isUploading) ? "not-allowed" : "pointer",
+                    transition: "all 0.2s ease", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: ((!inputVal.trim() && !pendingFile) || isUploading) ? "none" : "0 2px 8px rgba(26,107,58,0.3)",
+                    marginBottom: 2, marginRight: 2
+                  }}
+                  title={isUploading ? "Uploading…" : "Send"}
+                >
+                  {isUploading ? (
+                    <span className="mini-spinner" style={{ borderTopColor: "#aaa", borderColor: "rgba(0,0,0,0.1)" }} />
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: "translateX(-1px) translateY(1px)" }}>
+                      <line x1="22" y1="2" x2="11" y2="13"/>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  )}
+                </button>
               )}
             </div>
-            <div style={{ fontSize: "0.65rem", color: "#aaa", ...sansSerif }}>
-              AI may make errors · verify sources
+            
+            {/* Footer Area */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.8rem", padding: "0 0.4rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {sessionDocs.length === 1 && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", userSelect: "none" }}>
+                    <div style={{ 
+                      width: 26, height: 14, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
+                      position: "relative", transition: "background 0.25s ease" 
+                    }}>
+                      <div style={{ 
+                        width: 10, height: 10, borderRadius: "50%", background: "#fff", 
+                        position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
+                        transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
+                      }} />
+                    </div>
+                    <span style={{ fontSize: "0.68rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
+                      Agentic mode
+                    </span>
+                    <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
+                  </label>
+                )}
+              </div>
+              <div style={{ fontSize: "0.62rem", color: "#999", ...sansSerif }}>
+                AI may make errors · verify sources
+              </div>
             </div>
           </div>
         </div>
