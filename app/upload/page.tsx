@@ -258,6 +258,10 @@ function UploadPageInner() {
         id: String(m.id),
         role: m.role === "assistant" ? "ai" : "user",
         content: m.content,
+        // Persisted per-quote verification results — without this, every
+        // quote in a reopened conversation would default to "unverified"
+        // regardless of what it actually verified as when first generated.
+        quoteMeta: m.quotes ?? undefined,
       }));
 
       setMessages(msgs);
