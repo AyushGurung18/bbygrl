@@ -18,6 +18,9 @@ type CompareResult = {
   document_b: string;
   total_segments_a: number;
   total_segments_b: number;
+  similarity_score?: number;
+  relatedness?: "unrelated" | "partial" | "related";
+  error?: string;
   changes: Change[];
 };
 
@@ -71,6 +74,11 @@ function ComparePageInner() {
     }
   }, [a, b, getToken]);
 
+  // Handle backend-level "unrelated" result (not an HTTP error but has .error)
+  const backendError = result?.error ?? null;
+  const isUnrelated = result?.relatedness === "unrelated";
+  const isPartial = result?.relatedness === "partial";
+
   useEffect(() => {
     if (authLoading) return;
     run();
@@ -122,11 +130,26 @@ function ComparePageInner() {
           )}
         </div>
         {result && (
-          <div style={{
-            flexShrink: 0, fontSize: "0.7rem", color: "#777", background: "rgba(0,0,0,0.04)",
-            padding: "0.3rem 0.7rem", borderRadius: 20, border: `1px solid ${borderCol}`,
-          }}>
-            {result.changes.length} change{result.changes.length !== 1 ? "s" : ""} detected
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {!isUnrelated && (
+              <div style={{
+                flexShrink: 0, fontSize: "0.7rem", color: "#777", background: "rgba(0,0,0,0.04)",
+                padding: "0.3rem 0.7rem", borderRadius: 20, border: `1px solid ${borderCol}`,
+              }}>
+                {result.changes.length} change{result.changes.length !== 1 ? "s" : ""}
+              </div>
+            )}
+            {result.similarity_score !== undefined && (
+              <div style={{
+                flexShrink: 0, fontSize: "0.7rem", fontWeight: 600,
+                color: isUnrelated ? "#c85050" : isPartial ? "#b8832a" : "#4a8a5a",
+                background: isUnrelated ? "rgba(200,80,80,0.06)" : isPartial ? "rgba(184,131,42,0.06)" : "rgba(74,138,90,0.06)",
+                padding: "0.3rem 0.7rem", borderRadius: 20,
+                border: `1px solid ${isUnrelated ? "rgba(200,80,80,0.2)" : isPartial ? "rgba(184,131,42,0.2)" : "rgba(74,138,90,0.2)"}`,
+              }}>
+                {Math.round((result.similarity_score ?? 0) * 100)}% overlap · {result.relatedness}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -191,7 +214,42 @@ function ComparePageInner() {
             </div>
           )}
 
-          {result && (
+          {/* BACKEND-LEVEL UNRELATED/PARTIAL WARNING */}
+          {result && isUnrelated && (
+            <div style={{
+              background: "rgba(200,80,80,0.05)", border: "1px solid rgba(200,80,80,0.2)",
+              borderRadius: 10, padding: "1.4rem 1.6rem", display: "flex", flexDirection: "column", gap: "0.7rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <span style={{ fontSize: "1.3rem" }}>🚫</span>
+                <strong style={{ color: "#c85050", fontSize: "0.9rem" }}>Documents are not related</strong>
+              </div>
+              <p style={{ fontSize: "0.8rem", color: "#555", margin: 0, lineHeight: 1.7 }}>
+                {backendError}
+              </p>
+              <div style={{ fontSize: "0.75rem", color: "#888", background: "rgba(0,0,0,0.03)", borderRadius: 6, padding: "0.7rem 0.9rem", lineHeight: 1.7 }}>
+                <strong style={{ color: "#555" }}>When does Compare work?</strong><br />
+                Compare is designed for documents that are <em>different versions</em> of the same text — e.g. v1 vs v2 of a contract, two editions of the same policy document, or two employment agreements from the same template. It uses clause-level diffing and AI classification, which only produces meaningful results when documents share substantial content.
+              </div>
+              <Link href="/library" style={{ color: green, fontSize: "0.75rem", fontWeight: 600 }}>← Go back to Library and select different documents</Link>
+            </div>
+          )}
+
+          {result && isPartial && (
+            <div style={{
+              background: "rgba(184,131,42,0.06)", border: "1px solid rgba(184,131,42,0.2)",
+              borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.75rem", color: "#7a5a1a",
+              marginBottom: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "flex-start",
+            }}>
+              <span style={{ flexShrink: 0, marginTop: "0.05rem" }}>⚠️</span>
+              <span>
+                <strong>Partial overlap</strong> — these documents share {Math.round((result.similarity_score ?? 0) * 100)}% vocabulary.
+                They may be from the same domain but different contexts. Changes shown below exist, but some may not represent meaningful edits.
+              </span>
+            </div>
+          )}
+
+          {result && !isUnrelated && (
             <>
               {/* DOC STATS */}
               <div style={{
