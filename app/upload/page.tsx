@@ -1145,7 +1145,7 @@ function UploadPageInner() {
                 <h2 style={{ fontSize: "clamp(1.1rem,2.5vw,1.6rem)", fontWeight: 700, color: "#1a2a1a", margin: "0 0 0.4rem", letterSpacing: "-0.01em", ...sansSerif }}>
                   Ask your documents anything
                 </h2>
-                <p style={{ fontSize: "0.82rem", color: "#777", textAlign: "center", maxWidth: 340, lineHeight: 1.75, margin: "0 auto", minHeight: "2.6em", ...sansSerif }}>
+                <p style={{ fontSize: "0.82rem", color: "#777", textAlign: "center", maxWidth: 340, lineHeight: 1.75, margin: "0 auto", minHeight: "3.5em", ...sansSerif }}>
                   {typedHint}
                   {typedHint.length < EMPTY_STATE_TEXT.length && (
                     <span style={{ display: "inline-block", width: 5, height: 12, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
