@@ -741,6 +741,14 @@ function UploadPageInner() {
 
   // Stops the answer while it's being written — whatever has already been
   // typed out stays on screen, nothing further is shown or generated.
+  //
+  // The backend already generated, quote-verified, and saved the FULL
+  // answer to the DB before a single byte streamed to the client (quote
+  // verification needs the complete text) — so stopping here is purely a
+  // client-side display cutoff unless told otherwise. Without the
+  // truncate-last-answer call below, reopening this chat later would show
+  // the complete, never-actually-stopped answer again, not what the user
+  // saw and stopped at.
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
     streamingActiveRef.current = false;
@@ -749,11 +757,26 @@ function UploadPageInner() {
       clearTimeout(typingTimerRef.current);
       typingTimerRef.current = null;
     }
-    setMessages(prev => prev.map(m =>
-      m.isStreaming ? { ...m, isStreaming: false, statusText: undefined } : m
-    ));
+    setMessages(prev => {
+      const stopped = prev.find(m => m.isStreaming);
+      if (stopped && activeId) {
+        authHeaders().then(headers =>
+          fetch(`${API}/sessions/${activeId}/truncate-last-answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...headers },
+            body: JSON.stringify({ content: stopped.content }),
+          })
+        ).catch(() => {
+          // Best-effort persistence — the visible stop already happened;
+          // a reopen just won't reflect the truncation if this fails.
+        });
+      }
+      return prev.map(m =>
+        m.isStreaming ? { ...m, isStreaming: false, statusText: undefined } : m
+      );
+    });
     setIsAnswering(false);
-  }, []);
+  }, [activeId, API, authHeaders]);
 
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
   const bg = "#e6e1d8";
