@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Contract Copilot — Frontend
 
-## Getting Started
+Next.js frontend for the legal-contract-analysis app. The backend (`../agentic-ai`) has the full project README — what the app does, how quote verification works, Part C details, and what's finished vs. not.
 
-First, run the development server:
+## Pages
+
+- `/library` — document library: upload (PDF/DOCX), list, open, delete, select several documents to ask a cross-document question or compare two versions
+- `/upload` — the chat interface (also reachable by opening a document from the library)
+- `/compare?a=<id>&b=<id>` — paragraph-level comparison between two documents, filterable by how significant each change is
+
+## Running locally
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in NEXT_PUBLIC_API_URL + NEXT_PUBLIC_SUPABASE_*
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Requires the backend (`../agentic-ai`) running and reachable at `NEXT_PUBLIC_API_URL`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Key pieces added for this assignment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `components/DocumentViewer.tsx` — renders the original PDF (via `react-pdf`) or DOCX (via `mammoth`, client-side HTML conversion) and highlights a cited passage by searching the rendered text (whitespace-tolerant, matching the backend's verification rule), not by trusting any position the model reports.
+- `lib/highlight.ts` — the shared find-and-highlight-in-the-DOM utility both viewers use.
+- `lib/quotes.ts` — parses the backend's verified-quote wire protocol out of a streamed answer and attaches verified/unverified metadata to each quote span.
+- `app/library/page.tsx`, `app/compare/page.tsx` — new pages for the document library and comparison view.

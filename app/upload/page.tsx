@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import AuthModal from "@/components/AuthModal";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import DocumentViewer, { ViewerTarget } from "@/components/DocumentViewer";
+import { parseQuoteSegments, QuoteMeta, QUOTE_MARK } from "@/lib/quotes";
 
 type Message = {
   id: string;
@@ -12,6 +16,7 @@ type Message = {
   content: string;
   isStreaming?: boolean;
   statusText?: string;
+  quoteMeta?: QuoteMeta[];
 };
 
 type Session = {
@@ -20,7 +25,14 @@ type Session = {
   created_at: string;
 };
 
-export default function App() {
+type SessionDoc = {
+  id: string;
+  filename: string;
+  doc_type: "pdf" | "docx";
+};
+
+function UploadPageInner() {
+  const searchParams = useSearchParams();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,6 +48,12 @@ export default function App() {
 
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
+
+  const [sessionDocs, setSessionDocs] = useState<SessionDoc[]>([]);
+  const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
+  const [agenticMode, setAgenticMode] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const appliedUrlSessionRef = useRef(false);
 
   const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 
@@ -76,7 +94,7 @@ export default function App() {
   }, []);
 
   // --- One-time typewriter for the empty-state hint ---
-  const EMPTY_STATE_TEXT = "Attach a PDF and I'll retrieve, verify, and cite the source before answering.";
+  const EMPTY_STATE_TEXT = "Attach a PDF or DOCX and I'll retrieve, verify, and cite the source before answering.";
   const [typedHint, setTypedHint] = useState("");
   const typewriterPlayedRef = useRef(false);
 
@@ -157,6 +175,40 @@ export default function App() {
       setSessions(data.sessions ?? []);
     } catch { }
   }, [API, authHeaders]);
+
+  // Opening a document from the library ("/upload?session=<id>") jumps
+  // straight into that chat instead of landing on the empty state.
+  useEffect(() => {
+    if (authLoading || appliedUrlSessionRef.current) return;
+    const urlSession = searchParams.get("session");
+    if (urlSession) {
+      appliedUrlSessionRef.current = true;
+      setActiveId(urlSession);
+    }
+  }, [authLoading, searchParams]);
+
+  // Which document(s) the active session is grounded in — drives the
+  // agentic-mode toggle (single doc only) and citation-click targets.
+  useEffect(() => {
+    if (!activeId) {
+      setSessionDocs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API}/sessions/${activeId}/documents`, { headers: await authHeaders() });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled) setSessionDocs((data.documents ?? []).map((d: any) => ({ id: d.id, filename: d.filename, doc_type: d.doc_type })));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [activeId, authHeaders]);
+
+  useEffect(() => {
+    if (sessionDocs.length !== 1) setAgenticMode(false);
+  }, [sessionDocs]);
 
   useEffect(() => {
     // Wait for the auth bootstrap (session restore, or anonymous sign-in for
@@ -319,11 +371,14 @@ export default function App() {
   }, [messages, isAnswering]);
 
   // --- Upload Handlers ---
+  const ACCEPTED_EXTENSIONS = [".pdf", ".docx"];
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const f = e.target.files[0];
-      if (f.type !== "application/pdf") {
-        alert("Only PDF files are supported!");
+      const ext = ACCEPTED_EXTENSIONS.find((x) => f.name.toLowerCase().endsWith(x));
+      if (!ext) {
+        alert(`Unsupported file type. Only ${ACCEPTED_EXTENSIONS.join(", ")} files are supported.`);
         e.target.value = "";
         return;
       }
@@ -519,13 +574,17 @@ export default function App() {
 
       setMessages(prev => [...prev, aiMsg]);
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       const res = await fetch(`${API}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...await authHeaders(),
         },
-        body: JSON.stringify({ q, session_id: sid, model: selectedModel }),
+        body: JSON.stringify({ q, session_id: sid, model: selectedModel, mode: agenticMode ? "agentic" : "standard" }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("Failed");
 
@@ -590,7 +649,17 @@ export default function App() {
           while ((match = STATUS_MARKER.exec(rawTail)) !== null) {
             cleaned += rawTail.slice(lastIndex, match.index);
             const label = match[1];
-            setMessages(prev => prev.map(m => m.id === aiId ? { ...m, statusText: label } : m));
+            if (label.startsWith("__QUOTES__:")) {
+              // Quote verification metadata — one entry per QUOTE_MARK pair
+              // in the answer, sent once generation + verification finish.
+              // Not a status line to display.
+              try {
+                const quoteMeta = JSON.parse(label.slice("__QUOTES__:".length));
+                setMessages(prev => prev.map(m => m.id === aiId ? { ...m, quoteMeta } : m));
+              } catch {}
+            } else {
+              setMessages(prev => prev.map(m => m.id === aiId ? { ...m, statusText: label } : m));
+            }
             lastIndex = STATUS_MARKER.lastIndex;
           }
           rawTail = rawTail.slice(lastIndex);
@@ -637,6 +706,11 @@ export default function App() {
       }
 
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User-initiated stop (handleStop already finalized the message
+        // and kept whatever had been generated) — not an error to report.
+        return;
+      }
       const errText = err instanceof Error && err.message ? err.message : "Connection Failed";
       setMessages(prev => {
         // aiId is only set once the chat request actually starts — a failure
@@ -660,6 +734,22 @@ export default function App() {
       setIsAnswering(false);
     }
   };
+
+  // Stops the answer while it's being written — whatever has already been
+  // typed out stays on screen, nothing further is shown or generated.
+  const handleStop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    streamingActiveRef.current = false;
+    streamingBufferRef.current = "";
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    setMessages(prev => prev.map(m =>
+      m.isStreaming ? { ...m, isStreaming: false, statusText: undefined } : m
+    ));
+    setIsAnswering(false);
+  }, []);
 
   const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
   const bg = "#e6e1d8";
@@ -730,6 +820,71 @@ export default function App() {
       ),
       td: ({ children }) => <td style={{ border: `1px solid ${subtleBorder}`, padding: "0.35em 0.6em" }}>{children}</td>,
     };
+  };
+
+  // Renders an AI message's content, resolving QUOTE_MARK-delimited spans
+  // into verified (clickable, opens the source document highlighted) or
+  // unverified (flagged, never shown as if it were genuine) styling. Only
+  // resolved once the message has fully arrived — mid-stream a chunk
+  // boundary can leave a quote mark temporarily unmatched, and the
+  // verification metadata only arrives at the very end anyway.
+  const openQuoteInViewer = useCallback((meta: QuoteMeta, quoteText: string) => {
+    const doc = sessionDocs.find(d => d.id === meta.document_id);
+    if (!doc) return;
+    setViewerTarget({
+      documentId: meta.document_id,
+      docType: doc.doc_type,
+      filename: doc.filename,
+      quote: quoteText,
+      page: meta.page,
+    });
+  }, [sessionDocs]);
+
+  const renderAiContent = (msg: Message) => {
+    if (msg.isStreaming) {
+      // Strip raw control markers during live typing rather than resolving
+      // them — segment metadata isn't available yet, so a premature render
+      // would briefly (and wrongly) show every quote as "unverified".
+      const plain = msg.content.split(QUOTE_MARK).join("");
+      return <ReactMarkdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(false)}>{plain}</ReactMarkdown>;
+    }
+
+    const segments = parseQuoteSegments(msg.content, msg.quoteMeta || []);
+    if (!segments.some(s => s.type === "quote")) {
+      return <ReactMarkdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(false)}>{msg.content}</ReactMarkdown>;
+    }
+
+    return (
+      <>
+        {segments.map((seg, i) => {
+          if (seg.type === "text") {
+            return <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={getMarkdownComponents(false)}>{seg.content}</ReactMarkdown>;
+          }
+          const verified = seg.meta.verified;
+          return (
+            <span
+              key={i}
+              onClick={verified ? () => openQuoteInViewer(seg.meta, seg.content) : undefined}
+              title={verified
+                ? `Verified quote from ${seg.meta.filename}${seg.meta.page ? ` (p.${seg.meta.page})` : ""}${seg.meta.occurrences > 1 ? ` — appears ${seg.meta.occurrences}×` : ""} — click to view in context`
+                : "Unverified — this text could not be located in the source document, so it may be inaccurate or invented"}
+              style={{
+                display: "inline",
+                background: verified ? "rgba(26,107,58,0.12)" : "rgba(200,80,80,0.12)",
+                borderBottom: verified ? `1.5px solid ${green}` : "1.5px dashed #c85050",
+                color: verified ? "inherit" : "#9a4a4a",
+                cursor: verified ? "pointer" : "help",
+                borderRadius: 2,
+                padding: "0 1px",
+              }}
+            >
+              {seg.content}
+              <sup style={{ fontSize: "0.6em", marginLeft: 2, opacity: 0.8 }}>{verified ? "✓" : "?"}</sup>
+            </span>
+          );
+        })}
+      </>
+    );
   };
 
   return (
@@ -869,8 +1024,23 @@ export default function App() {
                 loading…
               </div>
             )}
+            {sessionDocs.length > 0 && (
+              <div style={{ fontSize: "0.6rem", color: "#5a7a5a", letterSpacing: "0.04em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {sessionDocs.length === 1 ? sessionDocs[0].filename : `${sessionDocs.length} documents`}
+              </div>
+            )}
           </div>
-          {/* Model selection dropdown removed: routing handled by intent router on the backend */}
+          {sessionDocs.length === 2 && (
+            <Link
+              href={`/compare?a=${sessionDocs[0].id}&b=${sessionDocs[1].id}`}
+              style={{ fontSize: "0.62rem", color: green, textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 3, padding: "0.3rem 0.6rem", ...mono }}
+            >
+              compare these →
+            </Link>
+          )}
+          <Link href="/library" style={{ fontSize: "0.62rem", color: green, textDecoration: "none", border: `1px solid ${borderCol}`, borderRadius: 3, padding: "0.3rem 0.6rem", ...mono }}>
+            library
+          </Link>
         </div>
 
         <div style={{
@@ -992,9 +1162,13 @@ export default function App() {
                       )
                     ) : (
                       <>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(msg.role === "user")}>
-                          {msg.content}
-                        </ReactMarkdown>
+                        {msg.role === "ai" ? (
+                          renderAiContent(msg)
+                        ) : (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={getMarkdownComponents(true)}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        )}
                         {msg.isStreaming && msg.content !== "" && (
                           <span style={{ display: "inline-block", width: 7, height: 13, background: green, marginLeft: 2, verticalAlign: "text-bottom", animation: "cursorBlink 0.65s infinite" }} />
                         )}
@@ -1037,7 +1211,7 @@ export default function App() {
             >
               📎
             </button>
-            <input type="file" accept="application/pdf" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
+            <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
 
             <textarea
               value={inputVal}
@@ -1052,23 +1226,44 @@ export default function App() {
                 ...mono,
               }}
             />
-            <button
-              onClick={handleSend}
-              disabled={(!inputVal.trim() && !pendingFile) || isAnswering || isUploading}
-              style={{
-                padding: "0.8rem 1.2rem",
-                background: ((!inputVal.trim() && !pendingFile) || isAnswering || isUploading) ? "rgba(0,0,0,0.08)" : green,
-                color: ((!inputVal.trim() && !pendingFile) || isAnswering || isUploading) ? "#8a9a7a" : "#fff",
-                border: "none", borderRadius: 3, fontSize: "0.73rem",
-                cursor: ((!inputVal.trim() && !pendingFile) || isAnswering || isUploading) ? "not-allowed" : "pointer",
-                letterSpacing: "0.06em", transition: "all 0.2s ease", flexShrink: 0, ...mono,
-              }}
-            >
-              {isUploading ? "uploading..." : "send →"}
-            </button>
+            {isAnswering ? (
+              <button
+                onClick={handleStop}
+                style={{
+                  padding: "0.8rem 1.2rem", background: "#b33939", color: "#fff",
+                  border: "none", borderRadius: 3, fontSize: "0.73rem", cursor: "pointer",
+                  letterSpacing: "0.06em", flexShrink: 0, ...mono,
+                }}
+              >
+                ■ stop
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={(!inputVal.trim() && !pendingFile) || isUploading}
+                style={{
+                  padding: "0.8rem 1.2rem",
+                  background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.08)" : green,
+                  color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#8a9a7a" : "#fff",
+                  border: "none", borderRadius: 3, fontSize: "0.73rem",
+                  cursor: ((!inputVal.trim() && !pendingFile) || isUploading) ? "not-allowed" : "pointer",
+                  letterSpacing: "0.06em", transition: "all 0.2s ease", flexShrink: 0, ...mono,
+                }}
+              >
+                {isUploading ? "uploading..." : "send →"}
+              </button>
+            )}
           </div>
-          <div style={{ textAlign: "center", marginTop: "0.65rem", fontSize: "0.58rem", color: "#8a9a7a", letterSpacing: "0.1em" }}>
-            AI can make mistakes. Always verify the source material.
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", marginTop: "0.65rem" }}>
+            {sessionDocs.length === 1 && (
+              <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.6rem", color: green, cursor: "pointer", letterSpacing: "0.06em" }}>
+                <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} />
+                research mode (agentic tool search)
+              </label>
+            )}
+            <div style={{ fontSize: "0.58rem", color: "#8a9a7a", letterSpacing: "0.1em" }}>
+              AI can make mistakes. Always verify the source material.
+            </div>
           </div>
         </div>
       </main>
@@ -1140,6 +1335,15 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {viewerTarget && (
+        <DocumentViewer
+          target={viewerTarget}
+          apiBase={API}
+          authHeaders={authHeaders}
+          onClose={() => setViewerTarget(null)}
+        />
       )}
 
       <style>{`
@@ -1223,5 +1427,13 @@ export default function App() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Suspense fallback={<div style={{ padding: "2rem", fontFamily: "'Courier New', monospace" }}>Loading…</div>}>
+      <UploadPageInner />
+    </Suspense>
   );
 }
