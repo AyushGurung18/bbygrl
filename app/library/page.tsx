@@ -42,6 +42,14 @@ export default function LibraryPage() {
   const [busyAction, setBusyAction] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // A document row only exists once ingestion finishes — /upload just
+  // queues a background job and returns a job_id. Until that job reaches
+  // done/failed there's nothing in GET /documents to show yet, so an
+  // in-flight upload is tracked separately and rendered as its own
+  // "indexing…" row instead of silently showing nothing.
+  type PendingUpload = { key: string; filename: string; progress: number };
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+
   const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
     const token = await getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -100,6 +108,7 @@ export default function LibraryPage() {
 
     setUploading(true);
     setUploadError(null);
+    const pendingKey = `${f.name}-${Date.now()}`;
     try {
       const token = await getToken();
       if (!token) throw new Error("Your session isn't ready yet. Please wait a moment and try again.");
@@ -129,11 +138,48 @@ export default function LibraryPage() {
         } catch {}
         throw new Error(detail);
       }
-      await fetchDocs();
+      const { job_id } = await res.json();
+      if (!job_id) throw new Error("Upload succeeded but no job was returned to track indexing.");
+
+      // /upload only queues the job — the document row doesn't exist until
+      // the Celery worker finishes chunking/embedding, so GET /documents
+      // has nothing to show yet. Poll job status and render a synthetic
+      // "indexing…" row in the meantime instead of silently showing nothing
+      // until the user happens to refresh.
+      setPendingUploads((prev) => [...prev, { key: pendingKey, filename: f.name, progress: 0 }]);
+      setUploading(false); // let the button free up; progress now shows via the pending row
+
+      const POLL_INTERVAL_MS = 1500;
+      const POLL_TIMEOUT_MS = 180_000;
+      const pollStart = Date.now();
+      let finalStatus: any = null;
+      while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        const statusRes = await fetch(`${API}/upload/status/${job_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!statusRes.ok) continue;
+        const statusData = await statusRes.json();
+        if (statusData.status === "done" || statusData.status === "failed") {
+          finalStatus = statusData;
+          break;
+        }
+        const pct = typeof statusData.progress_percent === "number" ? statusData.progress_percent : 0;
+        setPendingUploads((prev) => prev.map((p) => (p.key === pendingKey ? { ...p, progress: pct } : p)));
+      }
+
+      if (!finalStatus) {
+        setUploadError(`Indexing "${f.name}" is taking longer than expected. It may still finish in the background — refresh shortly.`);
+      } else if (finalStatus.status === "failed") {
+        setUploadError(`Failed to index "${f.name}"${finalStatus.error ? `: ${finalStatus.error}` : "."}`);
+      } else {
+        await fetchDocs();
+      }
     } catch (e: any) {
       setUploadError(e?.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
+      setPendingUploads((prev) => prev.filter((p) => p.key !== pendingKey));
     }
   };
 
@@ -277,12 +323,33 @@ export default function LibraryPage() {
           <div style={{ fontSize: "0.75rem", color: "#8a9a7a" }}>Loading…</div>
         ) : loadError ? (
           <div style={{ fontSize: "0.75rem", color: "#c85050" }}>{loadError}</div>
-        ) : docs.length === 0 ? (
+        ) : docs.length === 0 && pendingUploads.length === 0 ? (
           <div style={{ textAlign: "center", padding: "4rem 1rem", color: "#8a9a7a", fontSize: "0.78rem" }}>
             No documents yet. Upload a PDF or DOCX contract to get started.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {pendingUploads.map((p) => (
+              <div
+                key={p.key}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.9rem", padding: "0.8rem 1rem",
+                  background: cardBg, border: `1px dashed ${borderCol}`, borderRadius: 5, opacity: 0.8,
+                }}
+              >
+                <span className="mini-spinner" style={{
+                  width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
+                  border: "2px solid rgba(26,107,58,0.25)", borderTopColor: green,
+                  animation: "spin 0.7s linear infinite",
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.filename}
+                  </div>
+                  <div style={{ fontSize: "0.63rem", color: "#8a7a2a" }}>indexing… {p.progress}%</div>
+                </div>
+              </div>
+            ))}
             {docs.map((d) => (
               <div
                 key={d.id}
@@ -336,6 +403,10 @@ export default function LibraryPage() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
