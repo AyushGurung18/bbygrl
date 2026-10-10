@@ -51,8 +51,20 @@ export function findAndHighlight(
   const nodeRanges: { node: Text; start: number; end: number }[] = [];
   let full = "";
   let node: Node | null;
+  let first = true;
   while ((node = walker.nextNode())) {
     const text = node as Text;
+    // A single space between every pair of text nodes, not just within one —
+    // confirmed live: react-pdf's text layer renders one <span> per line
+    // with no trailing space, so naive concatenation glues adjacent lines
+    // together ("payment.8. Governing Law", "State ofDelaware") and the
+    // whitespace-tolerant pattern (which still requires *some* separator,
+    // just not a specific amount) stops matching entirely. The inserted
+    // space sits in the gap *between* node ranges below, never inside one,
+    // so it can't corrupt a real match — \s+ already tolerates an extra
+    // space where a genuine one already existed (e.g. normal flowing HTML).
+    if (!first) full += " ";
+    first = false;
     const start = full.length;
     full += text.textContent || "";
     nodeRanges.push({ node: text, start, end: full.length });
