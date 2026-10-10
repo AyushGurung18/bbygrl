@@ -179,20 +179,34 @@ function UploadPageInner() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      setSessions(data.sessions ?? []);
+      // Deduplicate by ID — the optimistic prepend in createSession
+      // and the subsequent fetchSessions can otherwise briefly show
+      // the same session twice.
+      const seen = new Set<string>();
+      const unique = (data.sessions ?? []).filter((s: Session) => {
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
+      });
+      setSessions(unique);
     } catch { }
   }, [API, authHeaders]);
 
   // Opening a document from the library ("/upload?session=<id>") jumps
   // straight into that chat instead of landing on the empty state.
+  // Also immediately fetch sessions so the sidebar shows it without
+  // waiting for the regular auth-ready fetch.
   useEffect(() => {
     if (authLoading || appliedUrlSessionRef.current) return;
     const urlSession = searchParams.get("session");
     if (urlSession) {
       appliedUrlSessionRef.current = true;
       setActiveId(urlSession);
+      // Ensure this session appears in the sidebar even if the sidebar
+      // list hasn't loaded yet (e.g. navigated here via library link).
+      fetchSessions();
     }
-  }, [authLoading, searchParams]);
+  }, [authLoading, searchParams, fetchSessions]);
 
   // Which document(s) the active session is grounded in — drives the
   // agentic-mode toggle (single doc only) and citation-click targets.
@@ -345,19 +359,18 @@ function UploadPageInner() {
     if (!res.ok) throw new Error("Failed");
     const session = await res.json();
 
-    // Prepend immediately so the new session shows up with no lag, then
-    // reconcile against the real backend list right after — prepending
-    // alone onto potentially stale in-memory state is what let old,
-    // already-deleted sessions resurface (see the focus-refetch effect
-    // above for the full explanation).
-    setSessions(prev => [session, ...prev]);
+    // Optimistically prepend — deduplicate in case fetchSessions below
+    // returns before this state update is flushed (avoid double-entry).
+    setSessions(prev => {
+      const already = prev.some(s => s.id === session.id);
+      return already ? prev : [session, ...prev];
+    });
     fetchSessions();
 
-    // Set active ID but we DON'T clear messages here if we're about to populate them in handleSend
     setActiveId(session.id);
     setUploadSuccess(false);
     return session;
-  }, [API, getToken, fetchSessions]);
+  }, [API, authHeaders, fetchSessions]);
 
   const confirmDeleteSession = useCallback(async (id: string) => {
     if (deletingSessionsRef.current.has(id)) {
