@@ -116,21 +116,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { session: current } } = await supabase.auth.getSession();
     const isAnon = !current || current.user.is_anonymous;
 
+    const oauthOptions = {
+      provider: "google" as const,
+      options: {
+        redirectTo: window.location.origin + "/upload",
+      },
+    };
+
     if (isAnon && current) {
-      const { error } = await supabase.auth.linkIdentity({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin + "/upload",
-        },
-      });
-      if (error) throw new Error(error.message);
+      try {
+        const { error } = await supabase.auth.linkIdentity(oauthOptions);
+        if (error) throw error;
+      } catch {
+        // Fallback: If manual linking is disabled, sign out the anon session and sign in fresh
+        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signInWithOAuth(oauthOptions);
+        if (error) throw new Error(error.message);
+      }
     } else {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin + "/upload",
-        },
-      });
+      const { error } = await supabase.auth.signInWithOAuth(oauthOptions);
       if (error) throw new Error(error.message);
     }
   }, []);
