@@ -16,8 +16,8 @@ type Change = {
 type CompareResult = {
   document_a: string;
   document_b: string;
-  total_paragraphs_a: number;
-  total_paragraphs_b: number;
+  total_segments_a: number;
+  total_segments_b: number;
   changes: Change[];
 };
 
@@ -100,7 +100,7 @@ function ComparePageInner() {
           <>
             <div style={{ fontSize: "0.72rem", color: "#5a7a5a", marginBottom: "1rem" }}>
               <strong>{result.document_a}</strong> → <strong>{result.document_b}</strong>
-              {"  ·  "}{result.changes.length} change{result.changes.length === 1 ? "" : "s"} detected at paragraph level
+              {"  ·  "}{result.changes.length} change{result.changes.length === 1 ? "" : "s"} detected at clause/paragraph level
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.2rem" }}>
