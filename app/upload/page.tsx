@@ -1233,7 +1233,7 @@ function UploadPageInner() {
         </div>
 
         {/* INPUT AREA */}
-        <div style={{ borderTop: `1px solid ${borderCol}`, padding: "1rem 1.5rem 1rem", background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1 }}>
+        <div style={{ borderTop: `1px solid rgba(0,0,0,0.06)`, padding: "0.75rem 1.5rem", background: "#edeae3", flexShrink: 0, position: "relative", zIndex: 1 }}>
 
           {/* Upload Error Banner */}
           {uploadError && (
@@ -1257,13 +1257,16 @@ function UploadPageInner() {
               onClick={() => fileInputRef.current?.click()}
               title="Attach PDF or DOCX"
               style={{
-                width: 42, height: 42, background: "#fff", border: `1px solid ${borderCol}`,
-                borderRadius: 8, cursor: "pointer", color: "#777",
+                width: 40, height: 40, background: "#fff", border: "1px solid rgba(0,0,0,0.08)",
+                borderRadius: "50%", cursor: "pointer", color: "#666",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, transition: "border-color 0.15s",
+                flexShrink: 0, transition: "all 0.15s ease",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
               }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#f7f7f7"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
               </svg>
             </button>
@@ -1276,10 +1279,10 @@ function UploadPageInner() {
               placeholder="Ask anything about your document…"
               rows={1}
               style={{
-                flex: 1, background: "#fff", border: `1px solid ${borderCol}`, borderRadius: 8,
-                padding: "0.7rem 1rem", resize: "none", outline: "none", color: "#1c2b1c",
-                fontSize: "0.83rem", lineHeight: 1.6, minHeight: 42, maxHeight: 160,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                flex: 1, background: "#fff", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 24,
+                padding: "0.65rem 1.2rem", resize: "none", outline: "none", color: "#1c2b1c",
+                fontSize: "0.83rem", lineHeight: 1.5, minHeight: 40, maxHeight: 120,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.03) inset",
                 ...sansSerif,
               }}
             />
@@ -1287,9 +1290,10 @@ function UploadPageInner() {
               <button
                 onClick={handleStop}
                 style={{
-                  width: 42, height: 42, background: "#c04040", color: "#fff",
-                  border: "none", borderRadius: 8, fontSize: "0.85rem", cursor: "pointer",
+                  width: 40, height: 40, background: "#333", color: "#fff",
+                  border: "none", borderRadius: "50%", fontSize: "0.85rem", cursor: "pointer",
                   flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
                 }}
                 title="Stop generating"
               >
@@ -1300,20 +1304,21 @@ function UploadPageInner() {
                 onClick={handleSend}
                 disabled={(!inputVal.trim() && !pendingFile) || isUploading}
                 style={{
-                  width: 42, height: 42,
-                  background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.08)" : green,
+                  width: 40, height: 40,
+                  background: ((!inputVal.trim() && !pendingFile) || isUploading) ? "rgba(0,0,0,0.05)" : green,
                   color: ((!inputVal.trim() && !pendingFile) || isUploading) ? "#aaa" : "#fff",
-                  border: "none", borderRadius: 8, fontSize: "1rem",
+                  border: "none", borderRadius: "50%", fontSize: "1rem",
                   cursor: ((!inputVal.trim() && !pendingFile) || isUploading) ? "not-allowed" : "pointer",
                   transition: "all 0.2s ease", flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: ((!inputVal.trim() && !pendingFile) || isUploading) ? "none" : "0 2px 8px rgba(26,107,58,0.3)",
                 }}
                 title={isUploading ? "Uploading…" : "Send"}
               >
                 {isUploading ? (
                   <span className="mini-spinner" style={{ borderTopColor: "#aaa", borderColor: "rgba(0,0,0,0.1)" }} />
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: "translateX(-1px) translateY(1px)" }}>
                     <line x1="22" y1="2" x2="11" y2="13"/>
                     <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                   </svg>
@@ -1324,9 +1329,22 @@ function UploadPageInner() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.6rem", paddingLeft: "0.2rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               {sessionDocs.length === 1 && (
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.72rem", color: green, cursor: "pointer", fontWeight: 500, ...sansSerif }}>
-                  <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ accentColor: green }} />
-                  Research mode
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", userSelect: "none" }}>
+                  <div style={{ 
+                    width: 28, height: 16, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
+                    position: "relative", transition: "background 0.25s ease" 
+                  }}>
+                    <div style={{ 
+                      width: 12, height: 12, borderRadius: "50%", background: "#fff", 
+                      position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
+                      transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
+                    }} />
+                  </div>
+                  <span style={{ fontSize: "0.72rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
+                    Agentic mode
+                  </span>
+                  <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
                 </label>
               )}
             </div>
