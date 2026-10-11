@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import DocumentViewer, { ViewerTarget } from "@/components/DocumentViewer";
 import { parseQuoteSegments, QuoteMeta, QUOTE_MARK } from "@/lib/quotes";
-import { BrandLogo, AiSparkIcon, HeroBrandEmblem, ChatThreadIcon } from "@/components/BrandLogo";
+import { BrandLogo, AiAvatarIcon, HeroBrandEmblem } from "@/components/BrandLogo";
 
 type Message = {
   id: string;
@@ -1132,22 +1132,60 @@ function UploadPageInner() {
           return (
             <span
               key={i}
+              className={`quote-span ${verified ? "quote-verified" : "quote-unverified"}`}
               onClick={verified ? () => openQuoteInViewer(seg.meta, seg.content) : undefined}
               title={verified
-                ? `Verified quote from ${seg.meta.filename}${seg.meta.page ? ` (p.${seg.meta.page})` : ""}${seg.meta.occurrences > 1 ? ` — appears ${seg.meta.occurrences}×` : ""} — click to view in context`
-                : "Unverified — this text could not be located in the source document, so it may be inaccurate or invented"}
+                ? `Verified from ${seg.meta.filename}${seg.meta.page ? ` (p.${seg.meta.page})` : ""} — click to inspect source`
+                : "Unverified — text could not be verified in the source document"}
               style={{
                 display: "inline",
-                background: verified ? "rgba(26,107,58,0.12)" : "rgba(200,80,80,0.12)",
-                borderBottom: verified ? `1.5px solid ${green}` : "1.5px dashed #c85050",
-                color: verified ? "inherit" : "#9a4a4a",
+                color: "inherit",
+                borderBottom: verified ? `1.5px dotted rgba(26,107,58,0.45)` : "1.5px dashed rgba(200,80,80,0.4)",
                 cursor: verified ? "pointer" : "help",
                 borderRadius: 2,
                 padding: "0 1px",
               }}
             >
               {seg.content}
-              <sup style={{ fontSize: "0.6em", marginLeft: 2, opacity: 0.8 }}>{verified ? "✓" : "?"}</sup>
+              {verified ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    marginLeft: "0.25rem",
+                    padding: "0 0.35rem",
+                    borderRadius: 3,
+                    background: "rgba(26,107,58,0.08)",
+                    color: "#144f2c",
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                    verticalAlign: "baseline",
+                    border: "1px solid rgba(26,107,58,0.16)",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {seg.meta.page ? `p.${seg.meta.page}` : "cite"}
+                </span>
+              ) : (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    marginLeft: "0.25rem",
+                    padding: "0 0.35rem",
+                    borderRadius: 3,
+                    background: "rgba(200,80,80,0.08)",
+                    color: "#b42828",
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                    verticalAlign: "baseline",
+                    border: "1px solid rgba(200,80,80,0.16)",
+                    lineHeight: 1.35,
+                  }}
+                >
+                  ?
+                </span>
+              )}
             </span>
           );
         })}
@@ -1219,8 +1257,7 @@ function UploadPageInner() {
                 onClick={() => setActiveId(s.id)}
                 className={`sidebar-chat-item ${activeId === s.id ? "active" : ""}`}
               >
-                <ChatThreadIcon active={activeId === s.id} />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginLeft: "0.5rem" }}>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                   {s.title || "Untitled"}
                 </span>
                 <button
@@ -1334,7 +1371,7 @@ function UploadPageInner() {
             </div>
           ) : visibleMessages.length === 0 ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.2rem" }}>
-              <HeroBrandEmblem size={72} />
+              <HeroBrandEmblem size={52} />
               <div style={{ textAlign: "center" }}>
                 <h2 style={{ fontSize: "clamp(1.1rem,2.5vw,1.6rem)", fontWeight: 700, color: "#1a2a1a", margin: "0 0 0.4rem", letterSpacing: "-0.01em", ...sansSerif }}>
                   Ask your documents anything
@@ -1354,15 +1391,7 @@ function UploadPageInner() {
             visibleMessages.map((msg) => (
               <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: "0.7rem" }}>
                 {msg.role === "ai" && (
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 7,
-                    background: "linear-gradient(135deg, #1e7a42 0%, #144f2c 100%)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: 2,
-                    boxShadow: "0 2px 6px rgba(26,107,58,0.22)"
-                  }}>
-                    <AiSparkIcon size={16} />
-                  </div>
+                  <AiAvatarIcon size={26} />
                 )}
                 {/* Bubble + action buttons stacked vertically */}
                 <div style={{ display: "flex", flexDirection: "column", maxWidth: msg.role === "user" ? "78%" : "84%", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>

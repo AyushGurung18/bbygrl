@@ -36,13 +36,60 @@ const EMPTY_META: QuoteMeta = {
   occurrences: 0, char_start: null, char_end: null, case_mismatch: false,
 };
 
+/**
+ * Cleans up LLM repetition artifacts where a sentence is written in plain text
+ * (e.g. in quotation marks or on a bullet line) and then immediately repeated
+ * in quote sentinels.
+ */
+function cleanPrecedingDuplicate(text: string, quote: string): string {
+  if (!text || !quote) return text;
+  const qTrim = quote.trim();
+  if (qTrim.length < 3) return text;
+
+  const escapeRegex = (s: string) => s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const qEscaped = escapeRegex(qTrim);
+
+  // 1. Quoted duplicate right before quote: e.g. `marketed as "India's first..." `
+  const quotedPattern = new RegExp(`[("']\\s*${qEscaped}[.,;!?]?\\s*['")]\\s*$`, "i");
+  if (quotedPattern.test(text.trimEnd())) {
+    return text.trimEnd().replace(quotedPattern, "").trimEnd() + " ";
+  }
+
+  // 2. Bullet point line duplicate: e.g. `"Superior power of 73.5 kW..."\n\n• `
+  const bulletPattern = new RegExp(`[("']?\\s*${qEscaped}[.,;!?]?\\s*['")]?\\s*\\n+\\s*([•\\-*]\\s*)?$`, "i");
+  const bulletMatch = text.match(bulletPattern);
+  if (bulletMatch) {
+    const bulletPrefix = bulletMatch[1] || "";
+    return text.slice(0, bulletMatch.index).trimEnd() + (bulletPrefix ? "\n" + bulletPrefix : " ");
+  }
+
+  // 3. Parenthesized duplicate right before quote: e.g. `... ( `
+  const parenPattern = new RegExp(`\\(\\s*${qEscaped}[.,;!?]?\\s*\\)?\\s*$`, "i");
+  if (parenPattern.test(text.trimEnd())) {
+    return text.trimEnd().replace(parenPattern, "").trimEnd() + " ";
+  }
+
+  // 4. Exact raw duplicate at the end of the text
+  const rawPattern = new RegExp(`${qEscaped}[.,;!?]?\\s*$`, "i");
+  if (rawPattern.test(text.trimEnd())) {
+    return text.trimEnd().replace(rawPattern, "").trimEnd() + " ";
+  }
+
+  return text;
+}
+
 export function parseQuoteSegments(content: string, quoteMeta: QuoteMeta[]): MessageSegment[] {
   const parts = content.split(QUOTE_MARK);
   const segments: MessageSegment[] = [];
   let quoteIndex = 0;
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 0) {
-      if (parts[i]) segments.push({ type: "text", content: parts[i] });
+      let textPart = parts[i];
+      // Clean duplicate preceding text if next segment is a quote
+      if (i + 1 < parts.length && parts[i + 1]) {
+        textPart = cleanPrecedingDuplicate(textPart, parts[i + 1]);
+      }
+      if (textPart) segments.push({ type: "text", content: textPart });
     } else {
       const meta = quoteMeta[quoteIndex] ?? EMPTY_META;
       segments.push({ type: "quote", content: parts[i], meta, index: quoteIndex });
