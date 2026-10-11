@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import DocumentViewer, { ViewerTarget } from "@/components/DocumentViewer";
 import { parseQuoteSegments, QuoteMeta, QUOTE_MARK } from "@/lib/quotes";
-import { BrandLogo, AiAvatarIcon, HeroBrandEmblem } from "@/components/BrandLogo";
+import { BrandLogo, HeroBrandEmblem } from "@/components/BrandLogo";
 
 type Message = {
   id: string;
@@ -60,7 +60,10 @@ function UploadPageInner() {
   const [sessionDocs, setSessionDocs] = useState<SessionDoc[]>([]);
   const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
   const [agenticMode, setAgenticMode] = useState(false);
+  const [anonymizePii, setAnonymizePii] = useState(false);
   const [inputExpanded, setInputExpanded] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const appliedUrlSessionRef = useRef(false);
 
@@ -666,7 +669,13 @@ function UploadPageInner() {
           "Content-Type": "application/json",
           ...await authHeaders(),
         },
-        body: JSON.stringify({ q, session_id: sid, model: selectedModel, mode: agenticMode ? "agentic" : "standard" }),
+        body: JSON.stringify({
+          q,
+          session_id: sid,
+          model: selectedModel,
+          mode: agenticMode ? "agentic" : "standard",
+          anonymize: anonymizePii
+        }),
         signal: controller.signal,
       });
       if (!res.ok) throw new Error("Failed");
@@ -949,6 +958,65 @@ function UploadPageInner() {
     setSpeakingId(null);
   }, [activeId]);
 
+  const exportMessage = (id: string, text: string) => {
+    const docNames = sessionDocs.map(d => d.filename).join(", ") || "Contract Document";
+    const report = `# Contract Copilot — Analysis Report
+Date: ${new Date().toLocaleString()}
+Document(s): ${docNames}
+
+---
+
+## Response
+${text}
+
+---
+Verified quotes located and cross-referenced server-side against source contracts.
+Report generated with Contract Copilot
+`;
+    const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contract-analysis-${Date.now()}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleVoiceInput = () => {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.");
+      return;
+    }
+    if (isListening) {
+      try { recognitionRef.current?.stop(); } catch {}
+      setIsListening(false);
+    } else {
+      try {
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = true;
+        rec.lang = "en-US";
+        rec.onstart = () => setIsListening(true);
+        rec.onresult = (e: any) => {
+          const transcript = Array.from(e.results)
+            .map((r: any) => r[0].transcript)
+            .join("");
+          setInputVal(transcript);
+        };
+        rec.onerror = () => setIsListening(false);
+        rec.onend = () => setIsListening(false);
+        recognitionRef.current = rec;
+        rec.start();
+      } catch {
+        setIsListening(false);
+      }
+    }
+  };
+
   const MessageActions = ({ id, text, isUser }: { id: string; text: string; isUser: boolean }) => {
     const isCopied = copiedId === id;
     const isSpeaking = speakingId === id;
@@ -977,6 +1045,20 @@ function UploadPageInner() {
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="2" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M2 5h2v8.5a.5.5 0 0 0 .5.5H11v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
           )}
         </button>
+
+        {/* Export answer (AI answers only) */}
+        {!isUser && (
+          <button
+            title="Export answer (.md)"
+            onClick={() => exportMessage(id, text)}
+            style={btnBase}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v8m0 0l-2.5-2.5M8 10l2.5-2.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2.5 12.5h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+          </button>
+        )}
 
         {/* Share (Only if supported by browser natively) */}
         {'share' in navigator && (
@@ -1357,6 +1439,19 @@ function UploadPageInner() {
           position: "relative", zIndex: 1,
           opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
         }}>
+          {/* Agentic mode banner — shown at top of chat when agent mode is on */}
+          {agenticMode && !isLoadingMessages && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.55rem",
+              padding: "0.55rem 0.85rem", background: "rgba(26,107,58,0.07)",
+              border: "1px solid rgba(26,107,58,0.18)", borderRadius: 8,
+              fontSize: "0.73rem", color: greenDark, fontWeight: 500, ...sansSerif,
+              alignSelf: "center", maxWidth: 520, width: "100%"
+            }}>
+              <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: green, flexShrink: 0, animation: "agenticPulse 1.5s ease-in-out infinite" }} />
+              <span><strong style={{ fontWeight: 700 }}>Agent mode active.</strong> The AI will autonomously search, extract sections, and list clauses before answering. Each step streams live.</span>
+            </div>
+          )}
           {messagesLoadError ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingTop: "3rem", gap: "0.9rem" }}>
               <div style={{ fontSize: "0.8rem", color: "#c85050", textAlign: "center", maxWidth: 340, lineHeight: 1.75, ...sansSerif }}>
@@ -1388,24 +1483,36 @@ function UploadPageInner() {
               </div>
             </div>
           ) : (
-            visibleMessages.map((msg) => (
-              <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: "0.7rem" }}>
-                {msg.role === "ai" && (
-                  <AiAvatarIcon size={26} />
-                )}
+            visibleMessages.map((msg) => {
+              const isArabic = /[\u0600-\u06FF]/.test(msg.content);
+              return (
+              <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", width: "100%" }}>
                 {/* Bubble + action buttons stacked vertically */}
-                <div style={{ display: "flex", flexDirection: "column", maxWidth: msg.role === "user" ? "78%" : "84%", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{
-                    width: "100%",
-                    padding: msg.role === "user" ? "0.75rem 1rem" : "1rem 1.2rem",
-                    borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "2px 12px 12px 12px",
-                    border: msg.role === "user" ? "none" : `1px solid ${borderCol}`,
-                    background: msg.role === "user" ? green : "#fff",
-                    color: msg.role === "user" ? "#fff" : "#1c2b1c",
-                    boxShadow: msg.role === "user" ? "0 1px 8px rgba(26,107,58,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
-                  }}>
+                <div style={{ display: "flex", flexDirection: "column", maxWidth: msg.role === "user" ? "78%" : "85%", alignItems: msg.role === "user" ? "flex-end" : "flex-start", width: "auto" }}>
+                  <div 
+                    dir={isArabic ? "rtl" : "ltr"}
+                    style={{
+                      width: "100%",
+                      padding: msg.role === "user" ? "0.75rem 1rem" : "1rem 1.25rem",
+                      borderRadius: msg.role === "user" ? "14px 14px 3px 14px" : "3px 14px 14px 14px",
+                      border: msg.role === "user" ? "none" : `1px solid ${borderCol}`,
+                      background: msg.role === "user" ? green : "#fff",
+                      color: msg.role === "user" ? "#fff" : "#1c2b1c",
+                      boxShadow: msg.role === "user" ? "0 1px 8px rgba(26,107,58,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
+                      textAlign: isArabic ? "right" : "left",
+                    }}
+                  >
                   {msg.role === "ai" && (
-                    <div style={{ fontSize: "0.62rem", fontWeight: 700, color: green, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.5rem", ...sansSerif }}>Folio</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.5rem" }}>
+                      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: green, letterSpacing: "0.06em", textTransform: "uppercase", ...sansSerif }}>Assistant</span>
+                      {msg.statusText?.includes("Agent") || msg.statusText?.includes("tool") || msg.statusText?.includes("search") || (agenticMode && msg.isStreaming) ? (
+                        <span style={{ 
+                          fontSize: "0.56rem", fontWeight: 700, color: "#fff",
+                          background: green, borderRadius: 3, padding: "0.08rem 0.35rem",
+                          letterSpacing: "0.04em", textTransform: "uppercase", ...sansSerif
+                        }}>Agent</span>
+                      ) : null}
+                    </div>
                   )}
                   <div style={{ fontSize: "0.83rem", lineHeight: 1.75, minHeight: msg.isStreaming && msg.content === "" ? "2.5em" : undefined, display: msg.isStreaming && msg.content === "" ? "flex" : "block", alignItems: "center", ...sansSerif }}>
                     {msg.isStreaming && msg.content === "" ? (
@@ -1449,18 +1556,14 @@ function UploadPageInner() {
                     )}
                   </div>
                   </div>
-                  {/* Message action buttons — copy, share, read aloud */}
+                  {/* Message action buttons — copy, export, share, read aloud */}
                   {!msg.isStreaming && msg.content && (
                     <MessageActions id={msg.id} text={msg.content} isUser={msg.role === 'user'} />
                   )}
                 </div>
-                {msg.role === "user" && (
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1c2b1c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2, fontSize: "0.72rem", color: "#fff", fontWeight: 700, ...sansSerif }}>
-                    {user?.email?.[0]?.toUpperCase() || "Y"}
-                  </div>
-                )}
               </div>
-            ))
+            );
+            })
           )}
           <div ref={chatBottomRef} />
         </div>
@@ -1577,6 +1680,32 @@ function UploadPageInner() {
                 }}
               />
               
+              {/* Voice input button */}
+              <button
+                type="button"
+                onClick={toggleVoiceInput}
+                title={isListening ? "Listening... click to stop" : "Voice input (speak question)"}
+                style={{
+                  width: 36, height: 36,
+                  background: isListening ? "rgba(220, 38, 38, 0.12)" : "transparent",
+                  color: isListening ? "#dc2626" : "#666",
+                  border: isListening ? "1px solid rgba(220, 38, 38, 0.4)" : "none",
+                  borderRadius: "50%", cursor: "pointer",
+                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.18s ease", marginBottom: 2, marginRight: 4,
+                  animation: isListening ? "agenticPulse 1.2s infinite" : "none"
+                }}
+                onMouseEnter={e => { if (!isListening) e.currentTarget.style.background = "rgba(0,0,0,0.05)"; }}
+                onMouseLeave={e => { if (!isListening) e.currentTarget.style.background = "transparent"; }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
+
               {isAnswering ? (
                 <button
                   onClick={handleStop}
@@ -1621,23 +1750,58 @@ function UploadPageInner() {
 
             {/* Footer row — tightly packed, no bottom margin */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.3rem 0.4rem 0.4rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", userSelect: "none" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", userSelect: "none" }}>
                 <div style={{ 
-                  width: 26, height: 14, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
-                  position: "relative", transition: "background 0.25s ease", flexShrink: 0
+                  width: 30, height: 16, borderRadius: 10, background: agenticMode ? green : "rgba(0,0,0,0.15)", 
+                  position: "relative", transition: "background 0.25s ease", flexShrink: 0,
+                  boxShadow: agenticMode ? `0 0 0 3px rgba(26,107,58,0.15)` : "none"
                 }}>
                   <div style={{ 
-                    width: 10, height: 10, borderRadius: "50%", background: "#fff", 
-                    position: "absolute", top: 2, left: agenticMode ? 14 : 2, 
+                    width: 12, height: 12, borderRadius: "50%", background: "#fff", 
+                    position: "absolute", top: 2, left: agenticMode ? 16 : 2, 
                     transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.15)"
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
                   }} />
                 </div>
-                <span style={{ fontSize: "0.68rem", color: agenticMode ? green : "#888", fontWeight: 600, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
-                  Agentic mode
+                {/* Agentic badge with animated pulse when ON */}
+                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", transition: "all 0.25s" }}>
+                  {agenticMode && (
+                    <span style={{ 
+                      display: "inline-block", width: 6, height: 6, borderRadius: "50%", 
+                      background: green, flexShrink: 0,
+                      animation: "agenticPulse 1.5s ease-in-out infinite"
+                    }} />
+                  )}
+                  <span style={{ fontSize: "0.7rem", color: agenticMode ? green : "#888", fontWeight: 700, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
+                    {agenticMode ? "Agent mode" : "Standard mode"}
+                  </span>
                 </span>
                 <input type="checkbox" checked={agenticMode} onChange={(e) => setAgenticMode(e.target.checked)} style={{ display: "none" }} />
               </label>
+
+              {/* Anonymise PII Toggle */}
+              <label 
+                style={{ display: "flex", alignItems: "center", gap: "0.45rem", cursor: "pointer", userSelect: "none" }} 
+                title="Consistently masks names, emails, phones, and company entities before AI processing with reversible mapping"
+              >
+                <div style={{
+                  width: 28, height: 16, borderRadius: 10,
+                  background: anonymizePii ? "#1e40af" : "rgba(0,0,0,0.12)",
+                  position: "relative", transition: "background 0.25s ease",
+                }}>
+                  <div style={{
+                    width: 12, height: 12, borderRadius: "50%", background: "#fff",
+                    position: "absolute", top: 2, left: anonymizePii ? 14 : 2,
+                    transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                  }} />
+                </div>
+                <span style={{ fontSize: "0.7rem", color: anonymizePii ? "#1e40af" : "#888", fontWeight: 700, letterSpacing: "0.01em", transition: "color 0.25s", ...sansSerif }}>
+                  {anonymizePii ? "PII Masked" : "Anonymise"}
+                </span>
+                <input type="checkbox" checked={anonymizePii} onChange={(e) => setAnonymizePii(e.target.checked)} style={{ display: "none" }} />
+              </label>
+
               <div style={{ fontSize: "0.62rem", color: "#bbb", ...sansSerif }}>AI may make errors · verify sources</div>
             </div>
           </div>
@@ -1648,43 +1812,52 @@ function UploadPageInner() {
         <div style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.45)",
+          background: "rgba(0,0,0,0.55)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 100,
-          backdropFilter: "blur(4px)"
+          backdropFilter: "blur(6px)"
         }}>
           <div style={{
-            background: bg,
-            border: `1px solid ${green}`,
-            borderRadius: 4,
-            padding: "1.6rem",
-            maxWidth: 360,
+            background: "#fff",
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 12,
+            padding: "1.8rem",
+            maxWidth: 380,
             width: "90%",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-            ...mono
+            boxShadow: "0 20px 60px rgba(0,0,0,0.25), 0 4px 16px rgba(0,0,0,0.1)",
           }}>
-            <div style={{ fontWeight: 900, fontSize: "0.95rem", color: "#1a2a1a", marginBottom: "0.8rem", letterSpacing: "0.02em" }}>
-              [ DELETE SESSION ]
+            {/* Warning icon */}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(180,40,40,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b42828" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: "0.98rem", color: "#111", letterSpacing: "-0.01em", ...sansSerif }}>Delete chat session?</div>
             </div>
-            <div style={{ fontSize: "0.74rem", lineHeight: 1.6, color: "#5a7a5a", marginBottom: "1.5rem" }}>
-              Are you sure you want to delete this chat session? All message history will be permanently deleted.
+            <div style={{ fontSize: "0.82rem", lineHeight: 1.7, color: "#444", marginBottom: "1.6rem", paddingLeft: "3rem", ...sansSerif }}>
+              This chat and all its message history will be permanently deleted. This cannot be undone.
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.6rem" }}>
               <button
                 onClick={() => setSessionToDelete(null)}
                 style={{
-                  padding: "0.5rem 1rem",
+                  padding: "0.55rem 1.1rem",
                   background: "transparent",
-                  border: `1px solid ${borderCol}`,
-                  borderRadius: 3,
-                  color: "#1a2a1a",
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  borderRadius: 8,
+                  color: "#333",
                   cursor: "pointer",
-                  fontSize: "0.68rem",
-                  letterSpacing: "0.04em",
-                  ...mono
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  ...sansSerif
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
                 Cancel
               </button>
@@ -1695,18 +1868,21 @@ function UploadPageInner() {
                   await confirmDeleteSession(id);
                 }}
                 style={{
-                  padding: "0.5rem 1rem",
-                  background: "#b33939",
+                  padding: "0.55rem 1.1rem",
+                  background: "#c0392b",
                   border: "none",
-                  borderRadius: 3,
+                  borderRadius: 8,
                   color: "#fff",
                   cursor: "pointer",
-                  fontSize: "0.68rem",
-                  letterSpacing: "0.04em",
-                  ...mono
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  ...sansSerif,
+                  boxShadow: "0 2px 8px rgba(180,40,40,0.25)"
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = "#a93226"}
+                onMouseLeave={e => e.currentTarget.style.background = "#c0392b"}
               >
-                Delete
+                Delete session
               </button>
             </div>
           </div>
@@ -1733,6 +1909,7 @@ function UploadPageInner() {
         @keyframes statusLineIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         .status-line-anim { animation: statusLineIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
         @keyframes statusProgressSweep { 0% { left: -45%; width: 40%; } 50% { left: 60%; width: 20%; } 100% { left: 110%; width: 40%; } }
+        @keyframes agenticPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
         .status-progress-track {
           position: relative;
           width: 120px;
