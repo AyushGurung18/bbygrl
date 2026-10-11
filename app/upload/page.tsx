@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import DocumentViewer, { ViewerTarget } from "@/components/DocumentViewer";
 import { parseQuoteSegments, QuoteMeta, QUOTE_MARK } from "@/lib/quotes";
+import { BrandLogo, AiSparkIcon, HeroBrandEmblem, ChatThreadIcon } from "@/components/BrandLogo";
 
 type Message = {
   id: string;
@@ -588,20 +589,35 @@ function UploadPageInner() {
     const q = inputVal.trim();
     setInputVal("");
 
-    // Show the user's own message immediately, before any network round-trip
-    // (session creation, upload) — previously this waited until after both
-    // of those resolved, so the screen sat on the empty state with zero
-    // feedback, then the upload's own "indexed successfully" AI message
-    // would appear before the user's message ever showed up. Nothing should
-    // ever delay the user seeing their own message.
+    const userMsgId = Date.now().toString();
+    const aiId = (Date.now() + 1).toString();
+
+    // Show the user's message AND an immediate AI loader bubble with zero delay.
+    // The user feels prioritized immediately, then sees gradual real-time progress.
     if (q) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: "user", content: q }]);
+      const initialStatus = pendingFile
+        ? `Preparing ${pendingFile.name}…`
+        : (!activeId
+            ? "Initializing workspace session…"
+            : (agenticMode ? "Agent initializing research workflow…" : "Analyzing prompt & consulting knowledge…"));
+
+      setMessages(prev => [
+        ...prev,
+        { id: userMsgId, role: "user", content: q },
+        { id: aiId, role: "ai", content: "", isStreaming: true, statusText: initialStatus }
+      ]);
+
+      setTimeout(() => {
+        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 10);
     }
 
     let sid = activeId;
-    let aiId = "";
     try {
       if (!sid) {
+        if (q) {
+          setMessages(prev => prev.map(m => m.id === aiId ? { ...m, statusText: "Setting up workspace session…" } : m));
+        }
         const newSession = await createSession(q.slice(0, 40) || "New Chat");
         sid = newSession.id;
       } else {
@@ -617,17 +633,29 @@ function UploadPageInner() {
       }
 
       if (pendingFile) {
+        if (q) {
+          setMessages(prev => prev.map(m => m.id === aiId ? { ...m, statusText: `Uploading and indexing ${pendingFile.name}…` } : m));
+        }
         const uploaded = await uploadFile(pendingFile, sid!);
-        if (!uploaded) return;
-        if (!q) return;
+        if (!uploaded) {
+          if (q) setMessages(prev => prev.filter(m => m.id !== aiId));
+          return;
+        }
+        if (!q) {
+          if (aiId) setMessages(prev => prev.filter(m => m.id !== aiId));
+          return;
+        }
       }
 
       if (!q) return;
 
-      aiId = (Date.now() + 1).toString();
-      const aiMsg: Message = { id: aiId, role: "ai", content: "", isStreaming: true };
-
-      setMessages(prev => [...prev, aiMsg]);
+      // Update status before hitting the chat API
+      setMessages(prev => prev.map(m => m.id === aiId ? {
+        ...m,
+        statusText: agenticMode
+          ? "Agent reasoning & dispatching search tools…"
+          : "Checking semantic cache & document embeddings…"
+      } : m));
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -1150,18 +1178,11 @@ function UploadPageInner() {
         display: "flex", flexDirection: "column", height: "100%", overflow: "hidden",
       }}>
 
-        <div style={{ padding: "1.3rem 1.5rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.65rem" }}>
-          <div style={{ width: 30, height: 30, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-              <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
-              <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
-              <line x1="8" y1="10" x2="14" y2="10" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
-              <line x1="8" y1="13" x2="14" y2="13" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
-            </svg>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#111", letterSpacing: "0.01em", ...sansSerif }}>Folio</div>
-            <div style={{ fontSize: "0.62rem", color: green, opacity: 0.75, marginTop: 1, ...sansSerif }}>Document Intelligence</div>
+        <div style={{ padding: "1.2rem 1.4rem", borderBottom: `1px solid ${borderCol}`, display: "flex", alignItems: "center", gap: "0.65rem" }}>
+          <BrandLogo size={32} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#111", letterSpacing: "0.01em", ...sansSerif }}>Folio</div>
+            <div style={{ fontSize: "0.62rem", color: green, opacity: 0.85, fontWeight: 500, ...sansSerif }}>Document Intelligence</div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -1171,16 +1192,17 @@ function UploadPageInner() {
         </div>
 
         {/* Session History */}
-        <div style={{ padding: "1rem 1.2rem", flex: 1, overflowY: "auto" }}>
+        <div className="sidebar-scroll-container" style={{ padding: "1rem 1.1rem", flex: 1, minHeight: 0, overflowY: "auto" }}>
           <button
             onClick={handleNewChat}
             style={{
               width: "100%", padding: "0.6rem 0.8rem", background: green,
-              border: "none", borderRadius: 5, color: "#fff",
+              border: "none", borderRadius: 6, color: "#fff",
               cursor: "pointer", marginBottom: "1.1rem", fontSize: "0.78rem",
               fontWeight: 600, letterSpacing: "0.01em", display: "flex",
               alignItems: "center", justifyContent: "center", gap: "0.4rem",
-              ...sansSerif, transition: "opacity 0.15s",
+              ...sansSerif, transition: "all 0.15s ease",
+              boxShadow: "0 1px 3px rgba(26,107,58,0.2)"
             }}
           >
             <span style={{ fontSize: "1.1em", lineHeight: 1 }}>+</span> New Chat
@@ -1190,27 +1212,21 @@ function UploadPageInner() {
             Recent
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
             {sessions.map(s => (
               <div
                 key={s.id}
                 onClick={() => setActiveId(s.id)}
-                style={{
-                  padding: "0.55rem 0.75rem", borderRadius: 5, cursor: "pointer",
-                  background: activeId === s.id ? "rgba(26,107,58,0.1)" : "transparent",
-                  border: `1px solid ${activeId === s.id ? "rgba(26,107,58,0.2)" : "transparent"}`,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  fontSize: "0.78rem", color: activeId === s.id ? greenDark : "#333",
-                  fontWeight: activeId === s.id ? 600 : 400, transition: "all 0.12s",
-                  ...sansSerif,
-                }}
+                className={`sidebar-chat-item ${activeId === s.id ? "active" : ""}`}
               >
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                <ChatThreadIcon active={activeId === s.id} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginLeft: "0.5rem" }}>
                   {s.title || "Untitled"}
                 </span>
                 <button
                   onClick={(e) => deleteSession(s.id, e)}
-                  style={{ background: "none", border: "none", color: "#bbb", cursor: "pointer", fontSize: "0.7rem", padding: "0 0.1rem", flexShrink: 0, marginLeft: "0.4rem" }}
+                  className="sidebar-chat-delete"
+                  title="Delete chat"
                 >
                   ✕
                 </button>
@@ -1269,6 +1285,7 @@ function UploadPageInner() {
           >☰</button>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0, flex: 1 }}>
+            <BrandLogo size={22} />
             <span style={{ fontSize: "0.85rem", fontWeight: 700, color: greenDark, flexShrink: 0, ...sansSerif }}>Folio</span>
             {sessionDocs.length > 0 && (
               <>
@@ -1317,15 +1334,7 @@ function UploadPageInner() {
             </div>
           ) : visibleMessages.length === 0 ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.2rem" }}>
-              <div style={{ width: 64, height: 64, borderRadius: 14, background: green, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="34" height="34" viewBox="0 0 64 64" fill="none">
-                  <path d="M14 8 H40 L52 20 V56 H14 Z" fill="rgba(255,255,255,0.12)" stroke="white" strokeWidth="2" strokeLinejoin="round" />
-                  <path d="M40 8 V20 H52" stroke="white" strokeWidth="2" strokeLinejoin="round" fill="none" />
-                  <line x1="22" y1="30" x2="44" y2="30" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
-                  <line x1="22" y1="38" x2="44" y2="38" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
-                  <line x1="22" y1="46" x2="36" y2="46" stroke="white" strokeWidth="2" strokeLinecap="round" opacity={0.8} />
-                </svg>
-              </div>
+              <HeroBrandEmblem size={72} />
               <div style={{ textAlign: "center" }}>
                 <h2 style={{ fontSize: "clamp(1.1rem,2.5vw,1.6rem)", fontWeight: 700, color: "#1a2a1a", margin: "0 0 0.4rem", letterSpacing: "-0.01em", ...sansSerif }}>
                   Ask your documents anything
@@ -1345,11 +1354,14 @@ function UploadPageInner() {
             visibleMessages.map((msg) => (
               <div key={msg.id} className="msg-row" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", alignItems: "flex-start", gap: "0.7rem" }}>
                 {msg.role === "ai" && (
-                  <div style={{ width: 28, height: 28, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                      <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
-                      <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
-                    </svg>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 7,
+                    background: "linear-gradient(135deg, #1e7a42 0%, #144f2c 100%)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, marginTop: 2,
+                    boxShadow: "0 2px 6px rgba(26,107,58,0.22)"
+                  }}>
+                    <AiSparkIcon size={16} />
                   </div>
                 )}
                 {/* Bubble + action buttons stacked vertically */}
@@ -1731,6 +1743,88 @@ function UploadPageInner() {
           width: 10px; height: 10px; border-radius: 50%;
           border: 1.5px solid rgba(26,107,58,0.2); border-top-color: ${green};
           animation: spin 0.75s linear infinite; display: inline-block; flex-shrink: 0;
+        }
+
+        /* Sidebar Scrolling Container */
+        .sidebar-scroll-container {
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          min-height: 0 !important;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(26, 107, 58, 0.28) transparent;
+        }
+        .sidebar-scroll-container::-webkit-scrollbar {
+          width: 5px;
+        }
+        .sidebar-scroll-container::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .sidebar-scroll-container::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.12);
+          border-radius: 6px;
+        }
+        .sidebar-scroll-container::-webkit-scrollbar-thumb:hover {
+          background: rgba(26, 107, 58, 0.4);
+        }
+
+        /* Sidebar Chat Items - Clean Hover Box */
+        .sidebar-chat-item {
+          padding: 0.55rem 0.75rem;
+          border-radius: 7px;
+          cursor: pointer;
+          background: transparent;
+          border: 1px solid transparent;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 0.78rem;
+          color: #2e3d2e;
+          font-weight: 500;
+          transition: all 0.16s cubic-bezier(0.2, 0, 0, 1);
+          position: relative;
+          user-select: none;
+        }
+        .sidebar-chat-item:hover {
+          background: #dfdacd !important;
+          border-color: rgba(0, 0, 0, 0.14) !important;
+          color: #111 !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+          transform: translateY(-1px);
+        }
+        .sidebar-chat-item.active {
+          background: rgba(26, 107, 58, 0.12) !important;
+          border-color: rgba(26, 107, 58, 0.28) !important;
+          color: #144f2c !important;
+          font-weight: 600;
+          box-shadow: 0 1px 4px rgba(26, 107, 58, 0.08);
+        }
+        .sidebar-chat-item.active:hover {
+          background: rgba(26, 107, 58, 0.18) !important;
+          border-color: rgba(26, 107, 58, 0.36) !important;
+        }
+
+        /* Sidebar Chat Delete Button */
+        .sidebar-chat-delete {
+          background: none;
+          border: none;
+          color: #999;
+          cursor: pointer;
+          font-size: 0.72rem;
+          padding: 2px 5px;
+          border-radius: 4px;
+          flex-shrink: 0;
+          margin-left: 0.4rem;
+          opacity: 0;
+          transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+        }
+        .sidebar-chat-item:hover .sidebar-chat-delete,
+        .sidebar-chat-item.active .sidebar-chat-delete {
+          opacity: 0.7;
+        }
+        .sidebar-chat-delete:hover {
+          opacity: 1 !important;
+          background: rgba(200, 50, 50, 0.12) !important;
+          color: #c84040 !important;
         }
         
         /* Show message action buttons on row hover */

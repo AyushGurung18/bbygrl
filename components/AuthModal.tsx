@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 
+import { BrandLogo } from "./BrandLogo";
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -126,14 +128,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           background: "#fafafa",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: green, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-                <path d="M5 3 H13 L17 7 V17 H5 Z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.2" strokeLinejoin="round" />
-                <path d="M13 3 V7 H17" stroke="white" strokeWidth="1.2" strokeLinejoin="round" fill="none" />
-                <line x1="8" y1="10" x2="14" y2="10" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
-                <line x1="8" y1="13" x2="14" y2="13" stroke="white" strokeWidth="1" strokeLinecap="round" opacity={0.8} />
-              </svg>
-            </div>
+            <BrandLogo size={28} />
             <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#111", letterSpacing: "-0.01em" }}>
               Folio
             </span>
