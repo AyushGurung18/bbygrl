@@ -679,7 +679,7 @@ function UploadPageInner() {
         }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) throw new Error(await readApiError(res, `The server returned an error (status ${res.status}).`));
 
       // Check if the response is streaming (or plain text cache hit, which we also stream)
       const contentType = res.headers.get("Content-Type");
@@ -1110,8 +1110,16 @@ Report generated with Contract Copilot
     const inlineCodeBg = isUser ? "rgba(255,255,255,0.15)" : "rgba(26,107,58,0.08)";
     const textColor = isUser ? "rgba(255,255,255,0.95)" : "#1c2b1c";
     return {
+      // inline=true renders as a space-trailing <span>, not a bare fragment:
+      // live-confirmed, a bare fragment collapsed two genuinely separate
+      // sentences into one run with zero separator the moment a sentence
+      // boundary landed right at a text-segment edge next to a quote (e.g.
+      // "...except as required by law.Each party agrees..." — paraphrase
+      // then verbatim quote, no space). The space here is harmless where a
+      // real one already exists (collapses in HTML) and necessary where it
+      // doesn't.
       p: inline
-        ? ({ children }) => <>{children}</>
+        ? ({ children }) => <span style={{ display: "inline" }}>{children} </span>
         : ({ children }) => <p style={{ margin: "0 0 0.8em 0", lineHeight: 1.75, color: textColor, ...sansSerif }}>{children}</p>,
       strong: ({ children }) => <strong style={{ fontWeight: 700, color: isUser ? "#fff" : greenDark }}>{children}</strong>,
       em: ({ children }) => <em style={{ color: textColor, opacity: 0.85 }}>{children}</em>,

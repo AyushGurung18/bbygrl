@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import AuthModal from "@/components/AuthModal";
 import { readApiError } from "@/lib/apiError";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type DocumentRow = {
   id: string;
@@ -28,7 +29,7 @@ const cardBg = "#d4cfc4";        /* darker card for better contrast */
 const borderCol = "rgba(0,0,0,0.18)";
 const textPrimary = "#1a2a1a";
 const textMuted = "#4a6a4a";
-const mono = { fontFamily: "'Courier New', Courier, monospace" } as React.CSSProperties;
+const uiFont = { fontFamily: "'Inter', system-ui, -apple-system, sans-serif" } as React.CSSProperties;
 
 export default function LibraryPage() {
   const router = useRouter();
@@ -278,14 +279,14 @@ export default function LibraryPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: bg, ...mono, padding: "1.6rem 1.4rem" }}>
+    <div style={{ minHeight: "100vh", background: bg, ...uiFont, padding: "1.6rem 1.4rem" }}>
       <div style={{ maxWidth: 920, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1.6rem", flexWrap: "wrap" }}>
           <Link href="/upload" style={{ color: green, fontSize: "0.72rem", textDecoration: "none", letterSpacing: "0.08em", fontWeight: 700 }}>
             ← back to chat
           </Link>
-          <h1 style={{ fontSize: "1.2rem", fontWeight: 900, margin: 0, flex: 1, color: textPrimary, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "1.3rem" }}>📚</span> Document Library
+          <h1 style={{ fontSize: "1.2rem", fontWeight: 900, margin: 0, flex: 1, color: textPrimary, display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <BrandLogo size={22} /> Document Library
           </h1>
 
           <input type="file" accept=".pdf,.docx" ref={fileInputRef} onChange={handleFilePicked} style={{ display: "none" }} />
@@ -295,7 +296,7 @@ export default function LibraryPage() {
             style={{
               padding: "0.55rem 1rem", background: uploading ? "rgba(0,0,0,0.08)" : green,
               color: uploading ? "#8a9a7a" : "#fff", border: "none", borderRadius: 4,
-              fontSize: "0.72rem", cursor: uploading ? "not-allowed" : "pointer", ...mono,
+              fontSize: "0.72rem", cursor: uploading ? "not-allowed" : "pointer", ...uiFont,
             }}
           >
             {uploading ? "uploading…" : "+ upload document"}
@@ -495,5 +496,5 @@ const pillBtn: React.CSSProperties = {
   cursor: "pointer",
   fontSize: "0.68rem",
   fontWeight: 600,
-  ...mono,
+  ...uiFont,
 };
