@@ -90,7 +90,6 @@ function UploadPageInner() {
 
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
-  const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -608,10 +607,13 @@ function UploadPageInner() {
         { id: userMsgId, role: "user", content: q },
         { id: aiId, role: "ai", content: "", isStreaming: true, statusText: initialStatus }
       ]);
-
-      setTimeout(() => {
-        chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 10);
+      // Scrolling itself is handled by the [messages, isAnswering] effect on
+      // chatContainerRef (scoped to the message list) — this used to also
+      // call chatBottomRef.scrollIntoView() here, which native-scrolls every
+      // scrollable ancestor to bring its target into view, including <main>
+      // (overflow: hidden, no visible scrollbar, but still programmatically
+      // scrollable) — confirmed live: it pushed the header div above <main>'s
+      // clipped viewport instead of just scrolling the message list.
     }
 
     let sid = activeId;
@@ -1564,7 +1566,6 @@ Report generated with Contract Copilot
             );
             })
           )}
-          <div ref={chatBottomRef} />
         </div>
 
         {/* INPUT AREA - DOCKED BOTTOM, zero bottom gap */}
