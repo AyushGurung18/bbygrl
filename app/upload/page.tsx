@@ -1390,7 +1390,7 @@ Report generated with Contract Copilot
       <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       {/* MAIN */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", minWidth: 0, position: "relative" }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflow: "hidden", minWidth: 0, position: "relative" }}>
 
         <div className="bg-blob blob-1" />
         <div className="bg-blob blob-2" />
@@ -1434,7 +1434,7 @@ Report generated with Contract Copilot
         </div>
 
         <div ref={chatContainerRef} style={{
-          flex: 1, overflowY: "auto", padding: "1.6rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem",
+          flex: 1, minHeight: 0, overflowY: "auto", padding: "1.6rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.2rem",
           position: "relative", zIndex: 1,
           opacity: isLoadingMessages ? 0.45 : 1, transition: "opacity 0.25s ease",
         }}>
