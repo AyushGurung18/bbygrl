@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import DocumentViewer, { ViewerTarget } from "@/components/DocumentViewer";
 import { parseQuoteSegments, QuoteMeta, QUOTE_MARK } from "@/lib/quotes";
 import { BrandLogo, HeroBrandEmblem } from "@/components/BrandLogo";
+import { readApiError } from "@/lib/apiError";
 
 type Message = {
   id: string;
@@ -464,7 +465,7 @@ function UploadPageInner() {
       }
 
       const formData = new FormData();
-      formData.append("file", uploadedFile);
+      formData.append("file", uploadedFile, uploadedFile.name);
       const res = await fetch(`${API}/upload?session_id=${sessionId}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -478,12 +479,10 @@ function UploadPageInner() {
         if (res.status === 413) {
           throw new Error("That file is too large for the server to accept.");
         }
-        let detail = `Upload failed (status ${res.status}).`;
-        try {
-          const body = await res.json();
-          if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-        } catch {}
-        throw new Error(detail);
+        if (res.status >= 500) {
+          throw new Error("The server hit an error processing that file. Please try again.");
+        }
+        throw new Error(await readApiError(res, `Upload failed (status ${res.status}).`));
       }
 
       let data: any;

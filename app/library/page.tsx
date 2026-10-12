@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import AuthModal from "@/components/AuthModal";
+import { readApiError } from "@/lib/apiError";
 
 type DocumentRow = {
   id: string;
@@ -126,19 +127,14 @@ export default function LibraryPage() {
       const session = await sessionRes.json();
 
       const formData = new FormData();
-      formData.append("file", f);
+      formData.append("file", f, f.name);
       const res = await fetch(`${API}/upload?session_id=${session.id}`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (!res.ok) {
-        let detail = `Upload failed (status ${res.status}).`;
-        try {
-          const body = await res.json();
-          if (body?.detail) detail = body.detail;
-        } catch {}
-        throw new Error(detail);
+        throw new Error(await readApiError(res, `Upload failed (status ${res.status}).`));
       }
       const { job_id } = await res.json();
       if (!job_id) throw new Error("Upload succeeded but no job was returned to track indexing.");
