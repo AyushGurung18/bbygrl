@@ -711,9 +711,15 @@ function UploadPageInner() {
         // byte — the fetch API doesn't always surface that as a network
         // error. Left unguarded, the AI bubble stays on isStreaming+empty
         // forever (the bouncing-dots fallback), with no error ever shown.
-        // This bounds the gap between reads: no data for this long means
-        // treat it as stuck rather than wait indefinitely.
-        const STALL_TIMEOUT_MS = 35_000;
+        // This bounds the gap between *individual reads*, not the whole
+        // request — it resets on every chunk received, including status
+        // markers. Live-confirmed: agentic mode's each-round LLM call can
+        // legitimately run close to or past 35s with zero bytes sent in
+        // between (one full provider-fallback attempt per round), firing
+        // this on a genuinely still-working request, not a stuck one —
+        // standard mode's per-node calls are shorter, so it keeps the
+        // tighter bound.
+        const STALL_TIMEOUT_MS = agenticMode ? 75_000 : 35_000;
         const readWithStallTimeout = (): Promise<ReadableStreamReadResult<Uint8Array>> =>
           Promise.race([
             reader.read(),
